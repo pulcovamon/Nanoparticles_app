@@ -13,12 +13,9 @@ Parameters:
 
 def loadImg():
     img = cv2.imread('AuNP50nm_008.jpg', cv2.IMREAD_GRAYSCALE)
-    my_index = [index(img < 100)]
     #img = img[my_index[0][0]:my_index[-1][0], my_index]
-    cv2.imshow(img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
     return img
+
 
 '''
 Function for bluring the image and substract the background

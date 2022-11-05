@@ -7,7 +7,6 @@ from skimage.io import imread
 from skimage.filters import threshold_otsu
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed
-from skimage.feature import peak_local_max
 
 
 

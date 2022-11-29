@@ -1,0 +1,8 @@
+odečítání pozadí: 
+- invertovat obrázek
+- použít algoritmus:
+    - rolling ball
+    - gryscale morfologie top head
+
+na příště:
+    - sepsat do dokumentu - popsat kroky

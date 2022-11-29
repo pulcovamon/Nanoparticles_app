@@ -2,69 +2,40 @@ import sys
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QApplication,
-    QCheckBox,
-    QComboBox,
-    QDateEdit,
-    QDateTimeEdit,
-    QDial,
-    QDoubleSpinBox,
-    QFontComboBox,
-    QLabel,
-    QLCDNumber,
-    QLineEdit,
-    QMainWindow,
-    QProgressBar,
-    QPushButton,
-    QRadioButton,
-    QSlider,
-    QSpinBox,
-    QTimeEdit,
-    QVBoxLayout,
-    QWidget,
+    QApplication, QWidget, QGridLayout, QFileDialog,
+    QPushButton, QLabel
 )
 
 
-# Subclass QMainWindow to customize your application's main window
-class MainWindow(QMainWindow):
+class Window(QWidget):
+
     def __init__(self):
-        super().__init__()
+        super().__init__(parent=None)
 
         self.setWindowTitle("Widgets App")
 
-        layout = QVBoxLayout()
-        widgets = [
-            QCheckBox,
-            QComboBox,
-            QDateEdit,
-            QDateTimeEdit,
-            QDial,
-            QDoubleSpinBox,
-            QFontComboBox,
-            QLCDNumber,
-            QLabel,
-            QLineEdit,
-            QProgressBar,
-            QPushButton,
-            QRadioButton,
-            QSlider,
-            QSpinBox,
-            QTimeEdit,
-        ]
+        layout = QGridLayout()
+        self.setLayout(layout)
+        
+        self.button = QPushButton('Open file')
+        self.button.clicked.connect(self.clicker)
+        layout.addWidget(self.button, 0, 0)
 
-        for w in widgets:
-            layout.addWidget(w())
+        self.label = QLabel('Filename: ')
+        layout.addWidget(self.label, 1, 0)
 
-        widget = QWidget()
-        widget.setLayout(layout)
 
-        # Set the central widget of the Window. Widget will expand
-        # to take up all the space in the window by default.
-        self.setCentralWidget(widget)
+    def clicker(self):
+        fname = QFileDialog.getOpenFileName(self,
+            "Open File", "", "Images (*.jpg *.png *.bmp *.tiff)")
+        if fname:
+            self.label.setText(fname[0])
+
+
 
 
 app = QApplication(sys.argv)
-window = MainWindow()
+window = Window()
 window.show()
 
-app.exec()
+sys.exit(app.exec())

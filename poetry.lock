@@ -189,6 +189,27 @@ PyQt6-Qt6 = ">=6.4.0"
 PyQt6-sip = ">=13.4,<14"
 
 [[package]]
+name = "PyQt6-Charts"
+version = "6.4.0"
+description = "Python bindings for the Qt Charts library"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+
+[package.dependencies]
+PyQt6 = ">=6.2.0"
+PyQt6-Charts-Qt6 = ">=6.4.0"
+PyQt6-sip = ">=13.4,<14"
+
+[[package]]
+name = "PyQt6-Charts-Qt6"
+version = "6.4.1"
+description = "The subset of a Qt installation needed by PyQt6-Charts."
+category = "main"
+optional = false
+python-versions = "*"
+
+[[package]]
 name = "PyQt6-Qt6"
 version = "6.4.0"
 description = "The subset of a Qt installation needed by PyQt6."
@@ -338,7 +359,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "8b54ea8c021799a5559aea7a2058a0f2613e0d02921be2d1d9b7ea4491b0e882"
+content-hash = "41c3dc67946c3327ec1cfcd3d696b7f1b25133c321eab8c2b08788efc9979cb2"
 
 [metadata.files]
 contourpy = [
@@ -653,6 +674,18 @@ PyQt6 = [
     {file = "PyQt6-6.4.0-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:79d093ce97010eac92e83a4e8efe231328af9ec757ba78c77e46ca1e007eca0d"},
     {file = "PyQt6-6.4.0-cp37-abi3-win_amd64.whl", hash = "sha256:37e399420866fff5c5bd49f56710dffd3a7a126afc6612b877d666f381bd554f"},
     {file = "PyQt6-6.4.0.tar.gz", hash = "sha256:91392469be1f491905fa9e78fa4e4059a89ab616ddf2ecfd525bc1d65c26bb93"},
+]
+PyQt6-Charts = [
+    {file = "PyQt6_Charts-6.4.0-cp37-abi3-macosx_10_14_universal2.whl", hash = "sha256:cbafcae9d536597d0f98800330c9ba1e28bcd33831bbd0732b49aa82031ff766"},
+    {file = "PyQt6_Charts-6.4.0-cp37-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:1363d0cd40fc77178f03e7717576e654689cf84a132fa5a2aa8f831264d32f3e"},
+    {file = "PyQt6_Charts-6.4.0-cp37-abi3-win_amd64.whl", hash = "sha256:5a1ac850e3c80d5b28639604429a7e9e848b6da34cfc354e5d1a2e204179d72c"},
+    {file = "PyQt6_Charts-6.4.0.tar.gz", hash = "sha256:b46eb12840516a039c36f70bb3f8423337f98fde266b582cead4049b77b43f64"},
+]
+PyQt6-Charts-Qt6 = [
+    {file = "PyQt6_Charts_Qt6-6.4.1-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:2d2db050791776a5e857d633b52f5eb175a2e54a09daec9c041ad866916f9f56"},
+    {file = "PyQt6_Charts_Qt6-6.4.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:9144db5817ee4c09cce31caab59f78a6d5807345355bbb5314f2dc56aec0f121"},
+    {file = "PyQt6_Charts_Qt6-6.4.1-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:14854333ab49b62e327a6af378ac23efb8c73fa7c22322a016effba34b180f76"},
+    {file = "PyQt6_Charts_Qt6-6.4.1-py3-none-win_amd64.whl", hash = "sha256:80d2871ad07077675df56e4db3debf81ea0be6626109b15c02b0a361480a0314"},
 ]
 PyQt6-Qt6 = [
     {file = "PyQt6_Qt6-6.4.0-py3-none-macosx_10_14_x86_64.whl", hash = "sha256:38cfedf942f6982e2492234c4912a6f9ae0d54430313ba32297b7d673adaa11d"},

@@ -7,7 +7,8 @@ from skimage.io import imread
 from skimage.filters import threshold_otsu
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed
-
+from skimage.transform import rescale
+#()
 
 
 def loading_img(img_path):
@@ -22,6 +23,7 @@ def loading_img(img_path):
 
     img_raw = imread(img_path)
     img_raw = img_raw[0:-100, :]
+    #img_raw = rescale(img_raw, 0.5)
 
     return img_raw
 
@@ -38,7 +40,13 @@ def filtering_img(img_raw):
 
     """
     img_raw = rgb2gray(img_raw)
-    img_filtered = filters.median(img_raw, np.ones((11, 11)))
+    img_raw = rescale(img_raw, 0.25, anti_aliasing = False)
+    img_raw = 1 - img_raw
+    img_filtered = filters.median(img_raw, np.ones((7, 7)))
+    background = filters.median(img_raw, np.ones((101, 101)))
+    img_filtered = img_filtered - background
+    plt.imshow(background)
+    plt.show()
 
     return img_filtered
 
@@ -57,7 +65,7 @@ def thresholding_img(img_filtered):
     threshold = threshold_otsu(img_filtered)
 
     img_binary = img_filtered > threshold
-    img_binary = ~img_binary
+    #img_binary = ~img_binary
 
     return img_binary
 
@@ -134,7 +142,7 @@ def ploting_img(img_raw, img_binary, img_dilate, img_segment):
 
 
 if __name__ == '__main__':
-    img_path = 'AuNP20nm_004.jpg'
+    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNP20nm_004.jpg'
 
     img_raw = loading_img(img_path)
 

@@ -146,7 +146,7 @@ def ploting_img(img_raw, img_binary, distance_map, labels):
 
 
 if __name__ == '__main__':
-    img_path = 'AuNP20nm_004.jpg'
+    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNP20nm_004.jpg'
 
     img_raw = loading_img(img_path)
 

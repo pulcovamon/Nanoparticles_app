@@ -1,0 +1,71 @@
+.heading {
+    font-size: 18px;
+    padding-bottom: 30px;
+    padding-top: 30px;
+}
+
+.normal {
+    color: #eeedcc;
+}
+
+.stat {
+    color: #e04000;
+}
+
+QWidget {
+    background-color: #252327;
+    color: "white";
+    font-family: 'Lucida Console';
+}
+
+QLineEdit {
+    background-color: #dbdbdb;
+    color: 'black';
+    border-color: black;
+    border-radius: 15px;
+    border-width: 1px;
+    border-style: outset;
+}
+
+QPushButton {
+    font-size: 16px;
+    border-radius: 15px;
+    border-color: black;
+    border-style: outset;
+    border-width: 2px;
+}
+
+QAction {
+    font-size: 14px;
+}
+
+QAction:hover {
+    background-color: #505358;
+    font-size: 15px;
+}
+
+QPushButton:hover {
+    background-color: #212338;
+    font-size: 17px;
+}
+
+QLineEdit:active {
+    background-color: #fffafa;
+}
+
+QLineEdit:focus {
+    background-color: #ffffff;
+}
+
+
+QPushButton:disabled {
+    background-color: #434346;
+}
+
+QComboBox {
+    font-size: 16px;
+}
+
+QComboBox:hover {
+    background-color: #545058;
+}

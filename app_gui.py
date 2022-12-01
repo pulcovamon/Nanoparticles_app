@@ -178,9 +178,11 @@ class MainWindow(QMainWindow):
     def processing(self):
        
         img = img_fcn.loading_img(self.fname[0])
-        filtered, sobel = img_fcn.filtering_img(img)
-        region_fill, erode = img_fcn.edges_operations(sobel)
-        self.labels = img_fcn.watershed_transform(erode, region_fill)
+        filtered = img_fcn.filtering_img(img)
+        binary = img_fcn.edges_operations(
+                                    filtered)
+        self.labels, distance = img_fcn.watershed_transform(
+                                    binary)
 
         filename = img_fcn.saving_img(self.labels)
         self.calculation.setDisabled(False)

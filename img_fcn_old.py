@@ -51,15 +51,18 @@ def filtering_img(img_raw):
     """
     img_raw = rgb2gray(img_raw)
     img_raw = rescale(img_raw, 0.5)
+    img_inverted = util.invert(img_raw)
 
     img_filtered = filters.median(
                     img_raw, morphology.disk(5))
 
-    return img_raw
+    sobel_edges = filters.sobel(img_filtered)
+
+    return img_filtered, sobel_edges
 
 
 
-def edges_operations(img_filtered):
+def edges_operations(sobel_edges):
     """Function for transforming edges image to binary image using thresholding and morfological operations
 
     Args:
@@ -69,14 +72,19 @@ def edges_operations(img_filtered):
         numpy.ndarray: binary image
     """
 
-    thresh = threshold_otsu(img_filtered)
-    binary = img_filtered < thresh
+    thresh = threshold_otsu(sobel_edges)
+    binary_edges = sobel_edges > thresh
 
-    return binary
+    binary_edges = morphology.binary_closing(binary_edges)
+
+    region_fill = ndi.binary_fill_holes(binary_edges)
+    erode = morphology.erosion(region_fill, morphology.square(width = 5))
+
+    return region_fill, erode
 
 
 
-def watershed_transform(binary):
+def watershed_transform(erode, region_fill):
     """Function for labeling of image using calculated distance map and markers for watershed transform
 
     Args:
@@ -87,7 +95,7 @@ def watershed_transform(binary):
         numpy.ndarray: labeled image
     """
 
-    distance = ndi.distance_transform_edt(binary)
+    distance = ndi.distance_transform_edt(erode)
 
     coords = peak_local_max(distance, footprint = np.ones((3, 3)), min_distance = 20)
     mask = np.zeros(distance.shape, dtype=bool)
@@ -95,12 +103,12 @@ def watershed_transform(binary):
 
     markers, _ = ndi.label(mask)
 
-    labels = watershed(-distance, markers, mask = binary)
+    labels = watershed(-distance, markers, mask = region_fill)
 
-    return labels, distance
+    return labels
 
 
-def ploting_img(img_median, binary, distance, labels):
+def ploting_img(img_median, sobel_edges, region_fill, labels):
     """Function for plotting images from segmentation proces
 
     Args:
@@ -115,12 +123,12 @@ def ploting_img(img_median, binary, distance, labels):
     plt.title('Raw image')
 
     plt.subplot(2, 2, 2)
-    plt.imshow(binary, cmap = 'gray')
-    plt.title('Binary')
+    plt.imshow(sobel_edges, cmap = 'gray')
+    plt.title('Edges detected using Sobel operator')
 
     plt.subplot(2, 2, 3)
-    plt.imshow(distance, cmap = 'gray')
-    plt.title('Distance')
+    plt.imshow(region_fill, cmap = 'gray')
+    plt.title('Binary image')
 
     plt.subplot(2, 2, 4)
     plt.imshow(labels, cmap = 'tab20')
@@ -138,7 +146,6 @@ def saving_img(img, directory = 'labels.png'):
     Returns:
         string: path to file
     """
-
     ind = np.argwhere(img == 0)
     color_map = plt.get_cmap('hsv', lut = (np.amax(img)+1))
     img = color_map(img)
@@ -148,6 +155,8 @@ def saving_img(img, directory = 'labels.png'):
     img[ind[:, 0], ind[:, 1], :] = 0
     img[:, :, 3] = 255
     cv2.imwrite(directory, img)
+
+
 
     filename = directory
 
@@ -170,14 +179,33 @@ def calculation(labeled, scale, type):
     sum_sizes = 0
 
     if type == 'Nanoparticles':
+        '''
+        params = cv2.SimpleBlobDetector_Params()
+
+        params.filterByCircularity = True
+        params.minCircularity = 0.1
+        params.filterByConvexity = True
+        params.minConvexity = 0.3
+        params.filterByInertia = True
+        params.minInertiaRatio = 0.5
+
+        img = cv2.imread('labels.png', 0)
+        img = 255 - img
+
+        detector = cv2.SimpleBlobDetector_create(params)
+        keypoint = detector.detect(img)
+        blank = np.zeros((1, 1))
+        blobs = cv2.drawKeypoints(img, keypoint, blank, (0, 0, 255),
+                                    cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        cv2.imwrite('blobs.png', blobs)
+        '''
 
         '''
         regionprops_table(image, properties)
         '''
         for region in regionprops(labeled):
 
-            diameter = (4 / math.pi *
-                            region.area)**(1/2)
+            diameter = (4 / math.pi * region.area)**(1/2)
             sizes.append(diameter)
             sum_sizes = sum_sizes + diameter
 
@@ -202,16 +230,17 @@ def calculation(labeled, scale, type):
 
 
 
+
 if __name__ == '__main__':
 
-    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNR660_009.jpg'
+    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNP20nm_004.jpg'
 
     img_raw = loading_img(img_path)
 
-    img_filtered = filtering_img(img_raw)
+    img_median, sobel_edges = filtering_img(img_raw)
 
-    binary = edges_operations(img_filtered)
+    region_fill, erode = edges_operations(sobel_edges)
 
-    labels, distance = watershed_transform(binary)
+    labels = watershed_transform(erode, region_fill)
 
-    ploting_img(img_filtered, binary, distance, labels)
+    ploting_img(img_median, sobel_edges, region_fill, labels)

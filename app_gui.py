@@ -1,4 +1,3 @@
-from os import path
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QLabel, QPushButton, QGridLayout,
@@ -10,9 +9,9 @@ from PyQt6.QtGui import (
     QPixmap, QDoubleValidator
 )
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QIcon, QAction, QKeySequence, QShortcut, QPainter
-from PyQt6.QtCharts import QChart, QChartView, QBarSet
-import numpy as np
+from PyQt6.QtGui import (
+    QIcon, QAction, QKeySequence, QShortcut
+)
 import img_fcn
 
 class MainWindow(QMainWindow):
@@ -22,8 +21,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('Nanoparticles app')
         self.setWindowIcon(QIcon('icon.png'))
 
-        self.sizes = np.zeros((1,2))
-
         toolbar = QToolBar('Actions')
         toolbar.setIconSize(QSize(25, 25))
         self.addToolBar(toolbar)
@@ -32,16 +29,19 @@ class MainWindow(QMainWindow):
         self.home.triggered.connect(self.home_window)
         toolbar.addAction(self.home)
 
-        self.histogram = QAction(QIcon('hist.png'), 'Histogram', self)
+        self.histogram = QAction(QIcon('hist.png'),
+                                    'Histogram', self)
         self.histogram.triggered.connect(self.hist_window)
         self.histogram.setDisabled(True)
         toolbar.addAction(self.histogram)
 
-        self.help = QAction(QIcon('help.png'), 'help', self)
+        self.help = QAction(QIcon('help.png'),
+                                        'help', self)
         self.help.triggered.connect(self.help_window)
         toolbar.addAction(self.help)
 
-        self.show_more = QAction(QIcon('show.png'), 'show more', self)
+        self.show_more = QAction(QIcon('show.png'),
+                                    'show more', self)
         toolbar.addAction(self.show_more)
 
         main_layout = QWidget()
@@ -82,48 +82,49 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(10, 0, 10, 10)
         layout.setSpacing(20)
 
-        icon = QLabel(self)
-        icon.setPixmap(QPixmap('nanotech_icon.png'))
-        icon.setFixedSize(40, 40)
-        icon.setScaledContents(True)
-        layout.addWidget(icon, 0, 0, 2, 1)
-
         title = QLabel('Segmentation of nanoparticles')
         title.setProperty('class', 'heading')
-        layout.addWidget(title, 0, 1, 2, 6, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(title, 0, 0, 2, 6,
+                                Qt.AlignmentFlag.AlignTop)
 
         self.add_img = QPushButton('Add image')
         self.add_img.clicked.connect(self.add_img_fcn)
         self.add_img.setFixedSize(300, 40)
-        layout.addWidget(self.add_img, 2, 1, 1, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.add_img, 2, 1, 1, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.process = QPushButton('Segment image')
         self.process.clicked.connect(self.processing)
         self.process.setDisabled(True)
         self.process.setFixedSize(300, 40)
-        layout.addWidget(self.process, 2, 5, 1, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.process, 2, 5, 1, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.calculation = QPushButton('Calculate', self)
         self.calculation.clicked.connect(self.calculation_fcn)
         self.calculation.setDisabled(True)
         self.calculation.setFixedSize(300, 40)
-        layout.addWidget(self.calculation, 3, 3, 1, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.calculation, 3, 3, 1, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.img = QLabel(self)
         self.img.setPixmap(QPixmap())
         self.img.setFixedSize(300, 300)
         self.img.setScaledContents(True)
-        layout.addWidget(self.img, 4, 1, 4, 4), Qt.AlignmentFlag.AlignCenter
+        layout.addWidget(self.img, 4, 1, 4, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.labeled = QLabel(self)
         self.labeled.setPixmap(QPixmap())
         self.labeled.setFixedSize(300, 300)
         self.labeled.setScaledContents(True)
-        layout.addWidget(self.labeled, 4, 5, 4, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.labeled, 4, 5, 4, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.avg_size = QLabel('')
         self.avg_size.setProperty('class', '.normal')
-        layout.addWidget(self.avg_size, 8, 1, 1, 7, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.avg_size, 8, 1, 1, 7,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.stack1.setLayout(layout)
 
@@ -134,7 +135,6 @@ class MainWindow(QMainWindow):
         name = QLabel('Histogram')
         name.setProperty('class', 'heading')
         name.setGeometry(10, 10, 30, 100)
-        #name.setAlignment(Qt.AlignmentFlag.AlignTop)
         layout.addWidget(name)
 
         self.hist = QLabel(self)
@@ -178,10 +178,8 @@ class MainWindow(QMainWindow):
     def processing(self):
        
         img = img_fcn.loading_img(self.fname[0])
-        filtered = img_fcn.filtering_img(img)
-        binary = img_fcn.edges_operations(
-                                    filtered)
-        self.labels, distance = img_fcn.watershed_transform(
+        binary = img_fcn.filtering_img(img)
+        self.labels, _ = img_fcn.watershed_transform(
                                     binary)
 
         filename = img_fcn.saving_img(self.labels)
@@ -199,9 +197,8 @@ class MainWindow(QMainWindow):
         calc_window.exec()
 
         if calc_window.avg:
-            self.avg_size.setText('Average NP diameter is '
+            self.avg_size.setText('Average NP area is '
                     + str(calc_window.avg) + 'px.')
-            self.sizes = calc_window.sizes
             self.histogram.setDisabled(False)
 
             pixmap = QPixmap('histogram.png')
@@ -239,7 +236,8 @@ class calculate_window(QDialog):
         self.type_np = QComboBox()
         self.type_np.addItem('Nanoparticles')
         self.type_np.addItem('Nanorods')
-        layout.addWidget(self.type_np, 1, 0, 1, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.type_np, 1, 0, 1, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
         self.shortcut = QShortcut(QKeySequence('Enter'), self)
         self.shortcut.setEnabled(False)
@@ -249,7 +247,8 @@ class calculate_window(QDialog):
         self.calculate.setDisabled(True)
         self.calculate.clicked.connect(self.calculation_fcn)
         self.calculate.setFixedSize(QSize(300, 30))
-        layout.addWidget(self.calculate, 2, 0, 1, 4, Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.calculate, 2, 0, 1, 4,
+                            Qt.AlignmentFlag.AlignCenter)
 
 
     def scale_fcn(self):
@@ -259,10 +258,8 @@ class calculate_window(QDialog):
 
     def calculation_fcn(self):
         type_text = str(self.type_np.currentText())
-        self.sizes, self.avg = img_fcn.calculation(self.labels, self.scale.text(), type_text)
-
-        with open('sizes.txt', 'w') as txt_file:
-            txt_file.write(str(self.sizes))
+        self.avg = img_fcn.calculation(
+                self.labels, self.scale.text(), type_text)
 
         self.close()
 

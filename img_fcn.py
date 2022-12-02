@@ -1,24 +1,19 @@
 import numpy as np
+import cv2
 import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
-from pathlib import Path
+import json
 import math
 
 from skimage import filters, morphology, util
-from skimage.io import imread, imsave
+from skimage.io import imread
 from skimage.filters import threshold_otsu
-from skimage.color import rgb2gray, label2rgb
+from skimage.color import rgb2gray
 from skimage.segmentation import watershed
-from skimage.feature import (
-        peak_local_max
-            )
+from skimage.feature import peak_local_max
 from skimage.transform import rescale
-from skimage.restoration import rolling_ball
-from skimage.morphology import disk, white_tophat
-from skimage.util import img_as_ubyte
-from skimage.measure import label, regionprops
-from skimage.draw import circle_perimeter, ellipse_perimeter
-import cv2
+from skimage.measure import regionprops, regionprops_table
+
 # () /
 
 
@@ -53,21 +48,7 @@ def filtering_img(img_raw):
     img_raw = rescale(img_raw, 0.5)
 
     img_filtered = filters.median(
-                    img_raw, morphology.disk(5))
-
-    return img_raw
-
-
-
-def edges_operations(img_filtered):
-    """Function for transforming edges image to binary image using thresholding and morfological operations
-
-    Args:
-        sobel_edges (numpy.ndarray): grayscale image of edges
-
-    Returns:
-        numpy.ndarray: binary image
-    """
+                    img_raw, morphology.disk(1))
 
     thresh = threshold_otsu(img_filtered)
     binary = img_filtered < thresh
@@ -77,7 +58,8 @@ def edges_operations(img_filtered):
 
 
 def watershed_transform(binary):
-    """Function for labeling of image using calculated distance map and markers for watershed transform
+    """Function for labeling of image using calculated 
+    distance map and markers for watershed transform
 
     Args:
         erode (numpy.ndarray): binary image
@@ -89,7 +71,8 @@ def watershed_transform(binary):
 
     distance = ndi.distance_transform_edt(binary)
 
-    coords = peak_local_max(distance, footprint = np.ones((3, 3)), min_distance = 20)
+    coords = peak_local_max(
+        distance, footprint = np.ones((3, 3)), min_distance = 20)
     mask = np.zeros(distance.shape, dtype=bool)
     mask[tuple(coords.T)] = True
 
@@ -154,13 +137,13 @@ def saving_img(img, directory = 'labels.png'):
     return filename
 
 
-def calculation(labeled, scale, type):
+def calculation(labeled, scale, np_type):
     """_summary_
 
     Args:
         labeled (numpy array): labeled image
         scale (int): microscope image scale
-        type (string): nanoparticles or nanorods
+        np_type (string): nanoparticles or nanorods
 
     Returns:
         _type_: _description_
@@ -169,49 +152,58 @@ def calculation(labeled, scale, type):
     sizes = []
     sum_sizes = 0
 
-    if type == 'Nanoparticles':
+    if np_type == 'Nanoparticles':
 
-        '''
-        regionprops_table(image, properties)
-        '''
-        for region in regionprops(labeled):
+        props = regionprops_table(labeled, properties =
+            ['label', 'area_convex', 'equivalent_diameter_area'])
 
-            diameter = (4 / math.pi *
-                            region.area)**(1/2)
-            sizes.append(diameter)
-            sum_sizes = sum_sizes + diameter
+        with open('props.txt', 'w') as txt_file:
+            txt_file.write('number area diameter')
 
-    if type == 'Nanorods':
-        
-        for region in regionprops(labeled):
+            for i in range(len(props['label'])):
+                txt_file.write('\n')
+                for key_val in props.keys():
+                    txt_file.write(str(props[key_val][i])+' ')
 
-            sizes.append(region.area)
-            sum_sizes = sum_sizes + region.area
 
-    sizes_arr = np.array(sizes)
 
-    fig = plt.hist(sizes_arr)
+    if np_type == 'Nanorods':
+
+        props = regionprops_table(labeled, properties =
+                ['label', 'area_convex', 'axis_major_length',
+                                        'axis_minor_length'])
+
+        with open('props.txt', 'w') as txt_file:
+            txt_file.write('number area major_axis minor_axis')
+
+            for i in range(len(props['label'])):
+                txt_file.write('\n')
+                for key_val in props.keys():
+                    txt_file.write(str(props[key_val][i])+' ')
+
+
+
+    plt.hist(props['area_convex'])
     plt.title('Histogram of sizes of NPs')
     plt.xlabel('size [px]')
     plt.ylabel('frequency')
     plt.savefig('histogram.png')
+    plt.clf()
 
-    avg = round(sum_sizes / len(sizes), 4)
+    avg = round(sum(props['area_convex']) / len(props['area_convex']), 4)
 
-    return sizes_arr, avg
+    return avg
 
 
 
 if __name__ == '__main__':
 
-    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNR660_009.jpg'
+    img_path = r'AuNR660_009.jpg'
 
     img_raw = loading_img(img_path)
 
-    img_filtered = filtering_img(img_raw)
-
-    binary = edges_operations(img_filtered)
+    binary = filtering_img(img_raw)
 
     labels, distance = watershed_transform(binary)
 
-    ploting_img(img_filtered, binary, distance, labels)
+    ploting_img(img_raw, binary, distance, labels)

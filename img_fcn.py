@@ -11,7 +11,7 @@ from skimage.filters import threshold_otsu
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
-from skimage.transform import rescale
+from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops, regionprops_table
 
 # () /
@@ -48,7 +48,7 @@ def filtering_img(img_raw):
     img_raw = rescale(img_raw, 0.5)
 
     img_filtered = filters.median(
-                    img_raw, morphology.disk(1))
+                    img_raw, morphology.disk(3))
 
     thresh = threshold_otsu(img_filtered)
     binary = img_filtered < thresh
@@ -111,7 +111,7 @@ def ploting_img(img_median, binary, distance, labels):
 
     plt.show()
 
-def saving_img(img, directory = 'labels.png'):
+def saving_img(img, directory = '/results/labels.png'):
     """Function for saving labeled image into given directory.
 
     Args:
@@ -127,7 +127,7 @@ def saving_img(img, directory = 'labels.png'):
     img = color_map(img)
     img = img*255
     img[ind[:, 0], ind[:, 1], 3] = 0
-    cv2.imwrite('labels_transparent.png', img)
+    cv2.imwrite('/results/labels_transparent.png', img)
     img[ind[:, 0], ind[:, 1], :] = 0
     img[:, :, 3] = 255
     cv2.imwrite(directory, img)
@@ -157,7 +157,7 @@ def calculation(labeled, scale, np_type):
         props = regionprops_table(labeled, properties =
             ['label', 'area_convex', 'equivalent_diameter_area'])
 
-        with open('props.txt', 'w') as txt_file:
+        with open('/results/props.txt', 'w') as txt_file:
             txt_file.write('number area diameter')
 
             for i in range(len(props['label'])):
@@ -173,7 +173,7 @@ def calculation(labeled, scale, np_type):
                 ['label', 'area_convex', 'axis_major_length',
                                         'axis_minor_length'])
 
-        with open('props.txt', 'w') as txt_file:
+        with open('/results/props.txt', 'w') as txt_file:
             txt_file.write('number area major_axis minor_axis')
 
             for i in range(len(props['label'])):
@@ -187,7 +187,7 @@ def calculation(labeled, scale, np_type):
     plt.title('Histogram of sizes of NPs')
     plt.xlabel('size [px]')
     plt.ylabel('frequency')
-    plt.savefig('histogram.png')
+    plt.savefig('/results/histogram.png')
     plt.clf()
 
     avg = round(sum(props['area_convex']) / len(props['area_convex']), 4)

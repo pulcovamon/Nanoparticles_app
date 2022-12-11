@@ -19,7 +19,29 @@ from skimage.util import img_as_ubyte
 from skimage.measure import label, regionprops
 from skimage.draw import circle_perimeter, ellipse_perimeter
 import cv2
+import json
+import os
 # () /
+
+
+def find_image_names(img_path, json_path):
+    """Function for loading image names, scales from microscope and types of particles
+
+    Args:
+        img_path (path): path to directory with images
+        json_path (path): path to json folder
+
+    Returns:
+        dict: dictionary with path to images, scales and types
+    """
+
+    with open(json_path) as json_file:
+        input_desciption = json.load(json_file)
+
+        for key in input_desciption:
+            key = os.path.join(img_path, key)
+    
+    return input_desciption
 
 
 def loading_img(img_path):
@@ -233,14 +255,20 @@ def calculation(labeled, scale, type):
 
 if __name__ == '__main__':
 
-    img_path = r'C:\Users\drakv\Desktop\fbmi\projekt\projekt\app\AuNP20nm_004.jpg'
+    input_description = find_image_names(
+        '/home/monika/Desktop/project/Nanoparticles_app/images',
+        '/home/monika/Desktop/project/Nanoparticles_app/images/scales.json')
 
-    img_raw = loading_img(img_path)
+    for key in input_description:
 
-    img_median, sobel_edges = filtering_img(img_raw)
+        img_path = key
 
-    region_fill, erode = edges_operations(sobel_edges)
+        img_raw = loading_img(img_path)
 
-    labels = watershed_transform(erode, region_fill)
+        img_median, sobel_edges = filtering_img(img_raw)
 
-    ploting_img(img_median, sobel_edges, region_fill, labels)
+        region_fill, erode = edges_operations(sobel_edges)
+
+        labels = watershed_transform(erode, region_fill)
+
+        ploting_img(img_median, sobel_edges, region_fill, labels)

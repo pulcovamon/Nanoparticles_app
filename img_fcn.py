@@ -13,8 +13,30 @@ from skimage.segmentation import watershed
 from skimage.feature import peak_local_max
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops, regionprops_table
+import json
+import os
 
 # () /
+
+def load_inputs(img_path, json_path):
+    """Function for loading image names, scales from microscope and types of particles
+
+    Args:
+        img_path (path): path to directory with images
+        json_path (path): path to json folder
+
+    Returns:
+        dict: dictionary with path to images, scales and types
+    """
+
+    with open(json_path) as json_file:
+        input_description = json.load(json_file)
+
+        for key in input_description:
+            input_description[key].append(
+                os.path.join(img_path, key))
+
+    return input_description
 
 
 def loading_img(img_path):
@@ -198,12 +220,18 @@ def calculation(labeled, scale, np_type):
 
 if __name__ == '__main__':
 
-    img_path = r'AuNR660_009.jpg'
+    input_description = load_inputs(
+        '/home/monika/Desktop/project/Nanoparticles_app/images',
+        '/home/monika/Desktop/project/Nanoparticles_app/images/scales.json')
 
-    img_raw = loading_img(img_path)
+    for image in input_description:
 
-    binary = filtering_img(img_raw)
+        img_path = input_description[image][2]
 
-    labels, distance = watershed_transform(binary)
+        img_raw = loading_img(img_path)
 
-    ploting_img(img_raw, binary, distance, labels)
+        binary = filtering_img(img_raw)
+
+        labels, distance = watershed_transform(binary)
+
+        ploting_img(img_raw, binary, distance, labels)

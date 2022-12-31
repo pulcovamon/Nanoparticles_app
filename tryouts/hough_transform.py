@@ -1,18 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy import ndimage as ndi
-from skimage.filters import median, threshold_otsu, sobel
+import cv2
+from skimage.filters import median
 from skimage.io import imread
 from skimage.transform import (
     rescale, hough_circle, hough_circle_peaks
 )
 from skimage.feature import canny
-from skimage.color import rgb2gray, gray2rgb
-from skimage.morphology import (
-    disk, binary_closing, erosion, square
-)
-from skimage.util import invert
-from skimage.draw import circle_perimeter
+from skimage.color import rgb2gray
+from skimage.morphology import disk
+
 
 def hough_segmentation(file_name, scale):
     """Function for image sementation uusing hough elipse transform
@@ -26,38 +23,58 @@ def hough_segmentation(file_name, scale):
 
     img_raw = imread(file_name)
     gray = rgb2gray(img_raw)
-
-    img_raw = rgb2gray(img_raw)
-    img_raw = rescale(img_raw, 0.5)
-    img_inverted = invert(img_raw)
-
+    gray = rescale(gray, 0.5)
     img_filtered = median(
-                    img_raw, disk(5))
+                    gray, disk(5))
 
     canny_edge = canny(img_filtered, sigma = 2)
 
-    #anyny_edge = canny(filtered, sigma = 1.5)
     hough_radii = np.arange(20, 100, 2)
     hough_res = hough_circle(canny_edge, hough_radii)
 
-    accums, cx, cy, radii = hough_circle_peaks(hough_res, hough_radii, total_num_peaks = 100)
+    accums, x, y, r = hough_circle_peaks(hough_res, hough_radii,
+            min_xdistance=10, min_ydistance=10)
+    x = np.uint16(np.around(x)) 
+    y = np.uint16(np.around(y))
+    r = np.uint16(np.around(r))
+
+    circles = [(x[i], y[i], r[i]) for i in range(len(x)) if accums[i] > 0.3]
+
+    img = np.zeros((gray.shape[0], gray.shape[1], 3))
+    img[:, :, 0] = gray
+    img[:, :, 1] = gray
+    img[:, :, 2] = gray
+
+    for x, y, r in circles:
+        cv2.circle(img, (x, y), r, (0, 255, 0), 1)
+        cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
+
+    return img, circles, 0.5
 
 
-    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(10, 4))
-    canny_edge = canny_edge * 255
-    canny_edge = canny_edge.astype(np.uint8)
-    image = gray2rgb(canny_edge)
-    for center_y, center_x, radius in zip(cy, cx, radii):
-        circy, circx = circle_perimeter(center_y, center_x, radius,
-                                        shape=image.shape)
-        image[circy, circx] = (255, 0, 0)
 
-    ax.imshow(image)
+def calcultaions(circles, pixel_size):
+    radius = [r*pixel_size for x, y, r in circles]
+    area = [r*pixel_size*np.pi**2 for x, y, r in circles]
+
+    mean_radius = np.mean(radius)
+    mean_area = np.mean(area)
+
+    return mean_radius, mean_area
+
+
+def plotting(img):
+
+    plt.imshow(img)
     plt.show()
 
 
 
 if __name__ == '__main__':
-    hough_segmentation(
-        '/home/monika/Desktop/project/app/Nanoparticles_app/images/AuNP20nm_004.jpg',
+    img, circles, pixel_size = hough_segmentation(
+        '/home/monika/Desktop/project/Nanoparticles_app/images/AuNP20nm_004.jpg',
         100)
+
+    radius, area = calcultaions(circles, pixel_size)
+
+    plotting(img)

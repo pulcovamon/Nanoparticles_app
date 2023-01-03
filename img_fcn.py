@@ -178,11 +178,11 @@ def hough_segmentation(img_filtered, pixel_size):
     thresh = threshold_otsu(img_filtered)
 
     for x, y, r in circles:
-        if img_filtered[x, y] > thresh:
+        '''if img_filtered[x, y] > thresh:
             circles.remove((x, y, r))
-        else:
-            cv2.circle(img, (x, y), r, (0, 255, 0), 1)
-            cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
+        else:'''
+        cv2.circle(img, (x, y), r, (0, 255, 0), 1)
+        cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
 
     return img, circles
 
@@ -416,7 +416,7 @@ if __name__ == '__main__':
     input_description = load_inputs(config['file'])
     method = config['method']
 
-    if method != ('watershed' or 'hough'):
+    if method != 'watershed' and method != 'hough':
         raise Exception('unknown method')
 
     images = []

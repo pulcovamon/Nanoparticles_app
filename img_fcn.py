@@ -6,7 +6,7 @@ import json
 
 from skimage import filters, morphology, img_as_ubyte
 from skimage.io import imread
-from skimage.filters import threshold_otsu
+from skimage.filters import threshold_otsu, threshold_minimum
 from skimage.color import rgb2gray, gray2rgb
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max, canny
@@ -111,7 +111,7 @@ def filtering_img(img_raw, scale, type, pixel_size):
 
 
 
-def watershed_transform(img_filtered):
+def watershed_transform(img_filtered, np_type):
     """Function for labeling of image using calculated 
     distance map and markers for watershed transform
 
@@ -122,9 +122,12 @@ def watershed_transform(img_filtered):
     Returns:
         numpy.ndarray: labeled image
     """
-    thresh = threshold_otsu(img_filtered)
-    binary = img_filtered < thresh
+    if np_type == 'nanoparticles':
+        thresh = threshold_minimum(img_filtered)
+    else:
+        thresh = threshold_otsu(img_filtered)
 
+    binary = img_filtered < thresh
     distance = ndi.distance_transform_edt(binary)
 
     coords = peak_local_max(
@@ -133,7 +136,6 @@ def watershed_transform(img_filtered):
     mask[tuple(coords.T)] = True
 
     markers, _ = ndi.label(mask)
-
     labels = watershed(-distance, markers, mask = binary)
 
     return labels, distance
@@ -432,8 +434,7 @@ if __name__ == '__main__':
             img_raw, scale, np_type, pixel_size)
 
         if method == 'watershed':
-
-            img, distance = watershed_transform(img_filtered)
+            img, distance = watershed_transform(img_filtered, np_type)
             diameter, sizes = calculation_watershed(img, pixel_size,
                                                     np_type)
 

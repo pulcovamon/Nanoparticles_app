@@ -67,11 +67,13 @@ def loading_img(img_path, scale):
 
     line = img_raw[-100:, int(width/2):, :]
     line = cv2.cvtColor(line, cv2.COLOR_RGB2GRAY)
-    line = cv2.Canny(line, 0, 255)
-    lines = cv2.HoughLinesP(line, 1, np.pi/180, threshold=50,
-                            minLineLength=100, maxLineGap=10)
-    lengths = [item[0][2]-item[0][0] for item in lines]
-    pixel_size = scale / max(lengths)
+
+    mask = line < 10
+    # try funciton remove small objects
+    mask = morphology.area_opening(mask)
+    indices = np.where(mask)
+    length = max(indices[1]) - min(indices[1])
+    pixel_size = scale / length
 
     img_raw = img_raw[0:-100, :]
 
@@ -178,11 +180,11 @@ def hough_segmentation(img_filtered, pixel_size):
     thresh = threshold_otsu(img_filtered)
 
     for x, y, r in circles:
-        '''if img_filtered[x, y] > thresh:
+        if img_filtered[x, y] > thresh:
             circles.remove((x, y, r))
-        else:'''
-        cv2.circle(img, (x, y), r, (0, 255, 0), 1)
-        cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
+        else:
+            cv2.circle(img, (x, y), r, (0, 255, 0), 1)
+            cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
 
     return img, circles
 
@@ -191,14 +193,16 @@ def hough_segmentation(img_filtered, pixel_size):
 
 def hough_nanorods(img_filtered, pixel_size):
 
+    img_filtered = rescale(img_filtered, 0.2)
+
     edges = canny(img_filtered, sigma=2)
     image_rgb = np.zeros((img_filtered.shape[0], img_filtered.shape[1], 3))
     image_rgb[:, :, 0] = img_filtered
     image_rgb[:, :, 1] = img_filtered
     image_rgb[:, :, 2] = img_filtered
     
-    result = hough_ellipse(edges, accuracy=50, threshold=150,
-                       min_size=400, max_size=500)
+    result = hough_ellipse(edges, accuracy=10, threshold=150,
+                       min_size=1, max_size=10)
     result.sort(order='accumulator')
 
     # Estimated parameters for the ellipse
@@ -445,6 +449,7 @@ if __name__ == '__main__':
                                                     pixel_size, np_type)
             elif np_type == 'nanorods':
                 pass
+                #hough_nanorods(img_filtered, pixel_size)
 
         images.append(img)
         names.append(img_path)

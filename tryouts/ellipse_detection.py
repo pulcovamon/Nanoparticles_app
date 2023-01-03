@@ -8,6 +8,7 @@ from skimage.draw import ellipse_perimeter
 # Load picture, convert to grayscale and detect edges
 image_rgb = data.coffee()[0:220, 160:420]
 image_gray = color.rgb2gray(image_rgb)
+print(image_gray.shape)
 edges = canny(image_gray, sigma=2.0,
               low_threshold=0.55, high_threshold=0.8)
 

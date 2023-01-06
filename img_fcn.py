@@ -138,8 +138,39 @@ def watershed_transform(img_filtered, np_type):
     markers, _ = ndi.label(mask)
     labels = watershed(-distance, markers, mask = binary)
 
-    return labels, distance
+    return labels, binary
 
+
+
+def find_overlaps(img, labels, np_type, pixel_size):
+
+    _, sizes = calculation_watershed(labels, pixel_size, np_type)
+
+    n = len(sizes)
+    mean = sum(sizes) / n
+    devs = [(i-mean)**2 for i in sizes]
+    var = sum(devs) / n
+
+    sizes.sort()
+    index = int(n/2)
+    if n%2 == 0:
+        median = (sizes[index] + sizes[index-1]) / 2
+    else:
+        median = sizes[index]
+
+    
+    for number, size in sizes:
+        if size > 2*median:
+            indices = np.argwhere(labels == number)
+            x_min = np.min(indices[:,0])
+            y_min = np.min(indices[:,1])
+            x_max = np.max(indices[:,0])
+            y_max = np.max(indices[:,1])
+            roi = img[x_min-10:x_max+10, y_min-10:y_max+10]
+            plt.imshow(roi)
+            plt.show()
+        elif size < median / 2:
+            sizes.remove(sizes)
 
 
 
@@ -409,8 +440,7 @@ def read_args():
 
 
 
-
-if __name__ == '__main__':
+def script():
     config = read_args()
 
     input_description = load_inputs(config['file'])
@@ -434,7 +464,7 @@ if __name__ == '__main__':
             img_raw, scale, np_type, pixel_size)
 
         if method == 'watershed':
-            img, distance = watershed_transform(img_filtered, np_type)
+            img, binary = watershed_transform(img_filtered, np_type)
             diameter, sizes = calculation_watershed(img, pixel_size,
                                                     np_type)
 
@@ -454,3 +484,31 @@ if __name__ == '__main__':
 
         print('saving into:', file_name)
     ploting_img(images, names, method)
+
+
+if __name__ == '__main__':
+    img_path = 'images/AuNP20nm_004.jpg'
+    scale = 100
+    np_type = 'nanoparticles'
+    img_raw, pixel_size = loading_img(
+            img_path, scale)
+    img_filtered, pixel_size = filtering_img(
+            img_raw, scale, np_type, pixel_size)
+    img, _ = watershed_transform(img_filtered, pixel_size)
+
+    edges = canny(img_filtered, sigma=2)
+    number = np.max(img)
+    m = round(number/4)
+    n = 4
+
+    for i in range(1, number+1):
+        indices = np.argwhere(img == i)
+        x_min = np.min(indices[:,0])
+        y_min = np.min(indices[:,1])
+        x_max = np.max(indices[:,0])
+        y_max = np.max(indices[:,1])
+        roi = edges[x_min-10:x_max+10, y_min-10:y_max+10]
+        plt.subplot(n, m, i)
+        plt.title(i)
+        plt.imshow(roi)
+    plt.show()

@@ -164,14 +164,20 @@ def segmentation(img, binary, np_type, pixel_size):
     props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
     t5 = time()
     print(t5 - t4)
-    find_duplicity(labels, props_ht, props_watershed)
+    props_final = find_duplicity(labels, props_ht, props_watershed)
     t6 = time()
     print(t6 - t5)
+    print(props_final)
 
 
 def find_duplicity(labels, props_ht, props_watershed):
-    for x, y, r in props_ht:
-        val = labels[y, x]
+    props_final = props_watershed
+    for cx, cy, r in props_ht:
+        val = labels[cy, cx]
+        props_final = [i for i in props_final if i[0] != val]
+        area = np.pi * r**2
+        props_final.append((val, area))
+
 
     max_val = np.max(labels)
     multiplicator = int(255 / max_val)
@@ -182,6 +188,8 @@ def find_duplicity(labels, props_ht, props_watershed):
 
     plt.imshow(img)
     plt.show()
+
+    return props_final
 
 
 def find_overlaps(img, binary, sizes, np_type, pixel_size):
@@ -218,7 +226,6 @@ def filter_blobs(labels, sizes, props):
         if size < median / 2:
             props.remove((number, size))
             labels[labels == number] = 0
-            print(props)
 
     return labels, props
 

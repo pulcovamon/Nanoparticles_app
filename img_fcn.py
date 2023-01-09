@@ -10,16 +10,16 @@ from skimage.filters import threshold_otsu, threshold_minimum
 from skimage.color import rgb2gray, gray2rgb
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max, canny
-from skimage.transform import (
-    rescale, hough_circle, hough_circle_peaks, hough_ellipse
-)
+from skimage.transform import rescale, hough_circle, hough_circle_peaks, hough_ellipse
 from skimage.measure import regionprops_table, label
 from skimage.draw import ellipse_perimeter
+from skimage.morphology import erosion, remove_small_holes, remove_small_objects
 import json
 import os
 import re
 import argparse
-from copy import deepcopy
+from copy import deepcopy, copy
+from time import time
 
 # () /
 
@@ -65,12 +65,13 @@ def loading_img(img_path, scale):
 
     line = img_raw[-100:, int(width / 2) :, :]
     line = cv2.cvtColor(line, cv2.COLOR_RGB2GRAY)
-    line = cv2.Canny(line, 0, 255)
-    lines = cv2.HoughLinesP(
-        line, 1, np.pi / 180, threshold=50, minLineLength=100,
-                                                maxLineGap=10)
-    lengths = [item[0][2] - item[0][0] for item in lines]
-    pixel_size = scale / max(lengths)
+
+    mask = line < 10
+    # try funciton remove small objects
+    mask = remove_small_objects(mask)
+    indices = np.where(mask)
+    length = max(indices[1]) - min(indices[1])
+    pixel_size = scale / length
 
     img_raw = img_raw[0:-100, :]
 
@@ -122,6 +123,7 @@ def binarizing(img, np_type):
         thresh = threshold_otsu(img)
 
     binary = img < thresh
+    binary = remove_small_holes(binary)
 
     return binary
 
@@ -138,8 +140,7 @@ def watershed_transform(binary):
     """
     distance = ndi.distance_transform_edt(binary)
 
-    coords = peak_local_max(distance, footprint=np.ones((3, 3)),
-                                                min_distance=20)
+    coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=20)
     mask = np.zeros(distance.shape, dtype=bool)
     mask[tuple(coords.T)] = True
 
@@ -149,33 +150,80 @@ def watershed_transform(binary):
     return labels
 
 
-def find_overlaps(img, binary, np_type, pixel_size):
-    labeled = watershed_transform(binary)
-    labels = label(binary, background=0)
-    sizes, props = calculation_watershed(labels, pixel_size, np_type)
-    sizes2, props2 = calculation_watershed(labeled, pixel_size, np_type)
+def segmentation(img, binary, np_type, pixel_size):
+    t1 = time()
+    labels = watershed_transform(binary)
+    t2 = time()
+    print(t2 - t1)
+    sizes, props_watershed = calculation_watershed(labels, pixel_size, np_type)
+    t3 = time()
+    print(t3 - t2)
+    labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
+    t4 = time()
+    print(t4 - t3)
+    props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
+    t5 = time()
+    print(t5 - t4)
+    find_duplicity(labels, props_ht, props_watershed)
+    t6 = time()
+    print(t6 - t5)
 
-    median = calc_median(deepcopy(sizes2))
+
+def find_duplicity(labels, props_ht, props_watershed):
+    for x, y, r in props_ht:
+        val = labels[y, x]
+
+    max_val = np.max(labels)
+    multiplicator = int(255 / max_val)
+    labels = np.uint8(labels * multiplicator)
+    color_map = plt.get_cmap("nipy_spectral")
+    img = color_map(labels)
+    img, _ = draw_circles(img, props_ht)
+
+    plt.imshow(img)
+    plt.show()
+
+
+def find_overlaps(img, binary, sizes, np_type, pixel_size):
+    labels = label(binary, background=0)
+    _, props = calculation_watershed(labels, pixel_size, np_type)
+
+    median = calc_median(deepcopy(sizes))
+    props_ht = []
 
     for number, size in props:
-        if size > 2 * median:
+        if size > 1.5 * median:
             indices = np.argwhere(labels == number)
             x_min = np.min(indices[:, 0]) - 10
             y_min = np.min(indices[:, 1]) - 10
             x_max = np.max(indices[:, 0]) + 10
             y_max = np.max(indices[:, 1]) + 10
-            roi = img[x_min : x_max, y_min : y_max]
-            circles, props = hough_segmentation(roi, pixel_size,
-                                                        np_type)
-            plt.imshow(circles)
-            plt.show()
+            roi = img[x_min:x_max, y_min:y_max]
+            circles = hough_segmentation(roi, pixel_size, np_type)
+            _, area = calcultaion_hough_transform(circles, pixel_size, np_type)
+            circles = filter_circles(roi, circles, area)
+            for circle in circles:
+                cx = circle[0] + y_min
+                cy = circle[1] + x_min
+                r = circle[2]
+                props_ht.append((cx, cy, r))
 
-    for number, size in props2:
+    return props_ht
+
+
+def filter_blobs(labels, sizes, props):
+    median = calc_median(deepcopy(sizes))
+
+    for number, size in props:
         if size < median / 2:
-            props2.remove([number, size])
+            props.remove((number, size))
+            labels[labels == number] = 0
+            print(props)
+
+    return labels, props
 
 
-def hough_segmentation(img_filtered, pixel_size, np_type):
+def hough_segmentation(img, pixel_size, np_type):
     """Segmentation using hough circle and elipse transform
 
     Args:
@@ -186,7 +234,7 @@ def hough_segmentation(img_filtered, pixel_size, np_type):
                             list of NP parameters
     """
 
-    canny_edge = canny(img_filtered, sigma=2)
+    canny_edge = canny(img, sigma=2)
 
     start = max(10, 5 / pixel_size)
     end = min(100, 50 / pixel_size)
@@ -202,17 +250,14 @@ def hough_segmentation(img_filtered, pixel_size, np_type):
 
     circles = [(x[i], y[i], r[i]) for i in range(len(x)) if accums[i] > 0.25]
 
-    diameter, area = calcultaion_hough_transform(circles, pixel_size, np_type)
-    img, circles = draw_circles(img_filtered, circles, area)
-
-    return img, circles
+    return circles
 
 
-def draw_circles(gray, circles, area):
+def draw_circles(img, circles):
     """Function for plotting circles into original image
 
     Args:
-        gray (numpy.ndarray): single-channel image
+        gray (numpy.ndarray): RGB image
         circles (list): list with tuples with center
                         indices and radius of circles
         area (list): list of calculated areas in nm
@@ -223,18 +268,9 @@ def draw_circles(gray, circles, area):
                         indices and radius of circles
     """
 
-    dims = gray.shape
-
-    img = np.zeros((dims[0], dims[1], 3))
-    img[:, :, 0] = gray
-    img[:, :, 1] = gray
-    img[:, :, 2] = gray
-
-    circles = filter_circles(gray, circles, area)
-
     for x, y, r in circles:
-            cv2.circle(img, (x, y), r, (0, 255, 0), 1)
-            cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
+        cv2.circle(img, (x, y), r, (0, 255, 0), 1)
+        cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
 
     return img, circles
 
@@ -258,24 +294,36 @@ def filter_circles(gray, circles, area):
     thresh = threshold_minimum(gray)
 
     i = 0
-    for x, y, r in circles:
-        pixels = pixels_in_circle(gray, x, y, r)
-        median_value = calc_median(pixels)
+    j = 0
+    first_cycle = True
+    while j < len(circles):
+        if i == len(circles):
+            i = 0
+            first_cycle = False
+        cx = int(circles[i][0])
+        cy = int(circles[i][1])
+        r = int(circles[i][2])
         median_area = calc_median(deepcopy(area))
-        x = int(x)
-        y = int(y)
-        r = int(r)
-        if median_value > thresh:
-            circles.remove((x, y, r))
-            area.pop(i)
-        elif area[i] < median_area/2:
-            circles.remove((x, y, r))
-            area.pop(i)
-        elif x-r < 0 or y-r < 0 or x+r > dims[1] or y+r > dims[0]:
-            circles.remove((x, y, r))
-            area.pop(i)
+        mean_area = np.mean(area)
+        if first_cycle:
+            pixels = pixels_in_circle(gray, cx, cy, r)
+            median_value = calc_median(copy(pixels))
+            if median_value > thresh:
+                circles.pop(i)
+                area.pop(i)
+            elif cx - r < 0 or cy - r < 0 or cx + r > dims[1] or cy + r > dims[0]:
+                circles.pop(i)
+                area.pop(i)
+            else:
+                i += 1
         else:
-            i += 1
+            if area[i] <= median_area / 1.5 or area[i] <= mean_area / 1.5:
+                circles.pop(i)
+                area.pop(i)
+                j = 0
+            else:
+                i += 1
+                j += 1
 
     return circles
 
@@ -294,7 +342,7 @@ def pixels_in_circle(img, cx, cy, r):
     """
 
     pixels = []
-    
+
     for x in range(img.shape[1]):
         for y in range(img.shape[0]):
             dx = x - cx
@@ -305,7 +353,6 @@ def pixels_in_circle(img, cx, cy, r):
                 pixels.append(img[y, x])
 
     return pixels
-
 
 
 def calc_median(data_list):
@@ -329,9 +376,7 @@ def calc_median(data_list):
     return median
 
 
-
-
-'''def hough_nanorods(img_filtered, pixel_size):
+"""def hough_nanorods(img_filtered, pixel_size):
     edges = canny(img_filtered, sigma=2)
     image_rgb = np.zeros((img_filtered.shape[0], img_filtered.shape[1], 3))
     image_rgb[:, :, 0] = img_filtered
@@ -365,7 +410,7 @@ def calc_median(data_list):
     ax2.set_title("Edge (white) and result (red)")
     ax2.imshow(edges)
 
-    plt.show()'''
+    plt.show()"""
 
 
 def ploting_img(images, names, method):
@@ -430,29 +475,27 @@ def calculation_watershed(labeled, pixel_size, np_type):
 
     if np_type.lower() == "nanoparticles":
         props = regionprops_table(
-            labeled, properties=[
-                        "label",
-                        "area_convex",
-                        "equivalent_diameter_area"
-                    ]
-                )
-
+            labeled, properties=["label", "area_convex", "equivalent_diameter_area"]
+        )
 
     if np_type.lower() == "nanorods":
         props = regionprops_table(
-            labeled, properties=[
-                        "label",
-                        "area_convex",
-                        "axis_major_length",
-                        "axis_minor_length",
-                    ],
-                )
+            labeled,
+            properties=[
+                "label",
+                "area_convex",
+                "axis_major_length",
+                "axis_minor_length",
+            ],
+        )
 
     avg = sum(props["area_convex"]) / len(props["area_convex"])
     diameter = 2 * (avg / np.pi) ** (1 / 2)
 
-    selected = [[props['label'][i], props['area_convex'][i]] for i in range(len(props['label']))]
-    sizes = props['area_convex']
+    selected = [
+        (props["label"][i], props["area_convex"][i]) for i in range(len(props["label"]))
+    ]
+    sizes = props["area_convex"]
 
     return sizes, selected
 
@@ -470,7 +513,7 @@ def calcultaion_hough_transform(circles, pixel_size, np_type):
     """
 
     diameter = [r * 2 * pixel_size for x, y, r in circles]
-    area = [(r * pixel_size)**2 * np.pi for x, y, r in circles]
+    area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
 
     return diameter, area
 
@@ -536,7 +579,7 @@ def read_args():
     return config
 
 
-'''config = read_args()
+"""config = read_args()
 
     input_description = load_inputs(config["file"])
     method = config["method"]
@@ -576,7 +619,7 @@ def read_args():
         histogram_sizes(sizes, file_name, np_type)
 
         print("saving into:", file_name)
-    ploting_img(images, names, method)'''
+    ploting_img(images, names, method)"""
 
 
 if __name__ == "__main__":
@@ -586,4 +629,4 @@ if __name__ == "__main__":
     img_raw, pixel_size = loading_img(img_path, scale)
     img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
     binary = binarizing(img_filtered, pixel_size)
-    find_overlaps(img_filtered, binary, np_type, pixel_size)
+    segmentation(img_filtered, binary, np_type, pixel_size)

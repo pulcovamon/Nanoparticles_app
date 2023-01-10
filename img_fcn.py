@@ -124,7 +124,7 @@ def binarizing(img, np_type):
 
     binary = img < thresh
     binary = remove_small_holes(binary)
-
+    
     return binary
 
 
@@ -151,33 +151,55 @@ def watershed_transform(binary):
 
 
 def segmentation(img, binary, np_type, pixel_size):
-    t1 = time()
+
     labels = watershed_transform(binary)
-    t2 = time()
-    print(t2 - t1)
     sizes, props_watershed = calculation_watershed(labels, pixel_size, np_type)
-    t3 = time()
-    print(t3 - t2)
     labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
-    t4 = time()
-    print(t4 - t3)
     props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
-    t5 = time()
-    print(t5 - t4)
-    props_final = find_duplicity(labels, props_ht, props_watershed)
-    t6 = time()
-    print(t6 - t5)
-    print(props_final)
+    img, sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
+
+    return img, sizes
 
 
-def find_duplicity(labels, props_ht, props_watershed):
-    props_final = props_watershed
+def overlay_images(raw, labels):
+
+    raw = raw/255
+    r = rescale(labels[:, :, 0], 2)
+    g = rescale(labels[:, :, 1], 2)
+    b = rescale(labels[:, :, 2], 2)
+    rgb = np.zeros((r.shape[0], r.shape[1], 3))
+    rgb[:, :, 0] = r
+    rgb[:, :, 1] = g
+    rgb[:, :, 2] = b
+    img = (7*raw + 3*rgb)/10
+
+    return img
+
+
+
+def find_duplicity(labels, props_ht, props_watershed, pixel_size):
+    """Function for
+
+    Args:
+        labels (_type_): _description_
+        props_ht (_type_): _description_
+        props_watershed (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    size_ht = []
     for cx, cy, r in props_ht:
         val = labels[cy, cx]
-        props_final = [i for i in props_final if i[0] != val]
-        area = np.pi * r**2
-        props_final.append((val, area))
+        props_watershed = [i for i in props_watershed if i[0] != val]
+        d = 2*r
+        size_ht.append(d)
 
+    diameter = lambda a: 2 * (a / np.pi)**(1/2)
+    size_watershed = [diameter(i[1]) for i in props_watershed]
+    sizes = size_ht + size_watershed
+    sizes = [round(pixel_size * i, 3) for i in sizes]
 
     max_val = np.max(labels)
     multiplicator = int(255 / max_val)
@@ -186,13 +208,11 @@ def find_duplicity(labels, props_ht, props_watershed):
     img = color_map(labels)
     img, _ = draw_circles(img, props_ht)
 
-    plt.imshow(img)
-    plt.show()
-
-    return props_final
+    return img, sizes
 
 
 def find_overlaps(img, binary, sizes, np_type, pixel_size):
+
     labels = label(binary, background=0)
     _, props = calculation_watershed(labels, pixel_size, np_type)
 
@@ -202,10 +222,10 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
     for number, size in props:
         if size > 1.5 * median:
             indices = np.argwhere(labels == number)
-            x_min = np.min(indices[:, 0]) - 10
-            y_min = np.min(indices[:, 1]) - 10
-            x_max = np.max(indices[:, 0]) + 10
-            y_max = np.max(indices[:, 1]) + 10
+            x_min = max(np.min(indices[:, 0]) - 10, 0)
+            y_min = max(np.min(indices[:, 1]) - 10, 0)
+            x_max = min(np.max(indices[:, 0]) + 10, labels.shape[0]-1)
+            y_max = min(np.max(indices[:, 1]) + 10, labels.shape[1]-1)
             roi = img[x_min:x_max, y_min:y_max]
             circles = hough_segmentation(roi, pixel_size, np_type)
             _, area = calcultaion_hough_transform(circles, pixel_size, np_type)
@@ -220,6 +240,18 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
 
 
 def filter_blobs(labels, sizes, props):
+    """Function for eliminate oversegmented blobs
+
+    Args:
+        labels (numpy.ndarray): labeled image from watershed
+        sizes (list): list of sizes from watershed transform
+        props (list): list of tuples with number of label
+                        and particular size from watershed
+
+    Returns:
+        numpy.ndarray, list: labeled image, list of properties
+    """
+
     median = calc_median(deepcopy(sizes))
 
     for number, size in props:
@@ -276,8 +308,8 @@ def draw_circles(img, circles):
     """
 
     for x, y, r in circles:
-        cv2.circle(img, (x, y), r, (0, 255, 0), 1)
-        cv2.circle(img, (x, y), 1, (0, 255, 0), 2)
+        cv2.circle(img, (x, y), r, (255, 0, 255), 1)
+        #cv2.circle(img, (x, y), 1, (0, 0, 0), 2)
 
     return img, circles
 
@@ -383,65 +415,22 @@ def calc_median(data_list):
     return median
 
 
-"""def hough_nanorods(img_filtered, pixel_size):
-    edges = canny(img_filtered, sigma=2)
-    image_rgb = np.zeros((img_filtered.shape[0], img_filtered.shape[1], 3))
-    image_rgb[:, :, 0] = img_filtered
-    image_rgb[:, :, 1] = img_filtered
-    image_rgb[:, :, 2] = img_filtered
 
-    result = hough_ellipse(
-        edges, accuracy=50, threshold=150, min_size=400, max_size=500
-    )
-    result.sort(order="accumulator")
-
-    # Estimated parameters for the ellipse
-    best = list(result[-1])
-    yc, xc, a, b = [int(round(x)) for x in best[1:5]]
-    orientation = best[5]
-
-    # Draw the ellipse on the original image
-    cy, cx = ellipse_perimeter(yc, xc, a, b, orientation)
-    image_rgb[cy, cx] = (0, 0, 255)
-    # Draw the edge (white) and the resulting ellipse (red)
-    edges = gray2rgb(img_as_ubyte(edges))
-    edges[cy, cx] = (250, 0, 0)
-
-    fig2, (ax1, ax2) = plt.subplots(
-        ncols=2, nrows=1, figsize=(8, 4), sharex=True, sharey=True
-    )
-
-    ax1.set_title("Original picture")
-    ax1.imshow(image_rgb)
-
-    ax2.set_title("Edge (white) and result (red)")
-    ax2.imshow(edges)
-
-    plt.show()"""
-
-
-def ploting_img(images, names, method):
+def ploting_img(images, names):
     """Function for plotting images from segmentation proces
 
     Args:
         img (numpy.ndarray): image for plotting
-        file_name (str): path to image
-        method (str): segmentation method
-        number (int): number of images
-        current_num (int): number of this image
+        names(str): path to images
     """
     for i in range(len(images)):
         width = round(len(images) / 2) + 1
         name = re.split("/|\.", names[i])
 
         plt.subplot(2, width, i + 1)
-
-        if method == "watershed":
-            plt.imshow(images[i], cmap="tab20")
-        else:
-            plt.imshow(images[i])
-
+        plt.imshow(images[i])
         plt.title(name[-2])
+
     plt.show()
 
 
@@ -566,8 +555,8 @@ def read_args():
     )
 
     parser.add_argument(
-        "-f",
-        "--file",
+        "-p",
+        "--path",
         type=str,
         default="images",
         help="path to images (default: images)",
@@ -579,6 +568,13 @@ def read_args():
         default="watershed",
         help="segmentation method (default: watershed)",
     )
+    parser.add_argument(
+        "-g",
+        "--graph",
+        type=bool,
+        default=False,
+        help="Plotting image (default: False)",
+    )
     args = parser.parse_args()
     config = vars(args)
     print(config)
@@ -586,12 +582,14 @@ def read_args():
     return config
 
 
-"""config = read_args()
+if __name__ == "__main__":
+    config = read_args()
 
-    input_description = load_inputs(config["file"])
+    input_description = load_inputs(config["path"])
     method = config["method"]
+    graph = config["graph"]
 
-    if method != "watershed" and method != "hough":
+    if method != "watershed":
         raise Exception("unknown method")
 
     images = []
@@ -603,21 +601,17 @@ def read_args():
         img_path = input_description[image][2]
 
         img_raw, pixel_size = loading_img(img_path, scale)
-
         img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
+        binary = binarizing(img_filtered, pixel_size)
 
-        if method == "watershed":
-            img, binary = watershed_transform(img_filtered, np_type)
-            diameter, sizes = calculation_watershed(img, pixel_size, np_type)
+        if np_type == 'nanoparticles':
+            labels, sizes = segmentation(img_filtered, binary, np_type, pixel_size)
+        elif np_type == 'nanorods':
+            pass
+        else:
+            raise Exception("Invalid NP type")
 
-        elif method == "hough":
-            if np_type == "nanoparticles":
-                img, circles = hough_segmentation(img_filtered, pixel_size)
-                diameter, sizes = calcultaion_hough_transform(
-                    circles, pixel_size, np_type
-                )
-            elif np_type == "nanorods":
-                pass
+        img = overlay_images(img_raw, labels)
 
         images.append(img)
         names.append(img_path)
@@ -626,14 +620,6 @@ def read_args():
         histogram_sizes(sizes, file_name, np_type)
 
         print("saving into:", file_name)
-    ploting_img(images, names, method)"""
-
-
-if __name__ == "__main__":
-    img_path = "images/AuNP20nm_004.jpg"
-    scale = 100
-    np_type = "nanoparticles"
-    img_raw, pixel_size = loading_img(img_path, scale)
-    img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
-    binary = binarizing(img_filtered, pixel_size)
-    segmentation(img_filtered, binary, np_type, pixel_size)
+        
+    if graph == True:
+        ploting_img(images, names)

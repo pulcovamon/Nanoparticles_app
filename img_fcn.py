@@ -3,29 +3,23 @@ import cv2
 import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
 import json
-
-from skimage import filters, morphology, img_as_ubyte
-from skimage.io import imread
-from skimage.filters import threshold_otsu, threshold_minimum
-from skimage.color import rgb2gray, gray2rgb
-from skimage.segmentation import watershed
-from skimage.feature import peak_local_max, canny
-from skimage.transform import rescale, hough_circle, hough_circle_peaks, hough_ellipse
-from skimage.measure import regionprops_table, label
-from skimage.draw import ellipse_perimeter
-from skimage.morphology import erosion, remove_small_holes, remove_small_objects
-import json
 import os
 import re
 import argparse
 from copy import deepcopy, copy
-from time import time
-
-# () /
+from skimage.io import imread
+from skimage.filters import threshold_otsu, threshold_minimum, median
+from skimage.color import rgb2gray
+from skimage.segmentation import watershed
+from skimage.feature import peak_local_max, canny
+from skimage.transform import rescale, hough_circle, hough_circle_peaks
+from skimage.measure import regionprops_table, label
+from skimage.morphology import remove_small_holes, remove_small_objects, disk
 
 
 def load_inputs(img_path):
-    """Function for loading image names, scales from microscope and types of particles
+    """Function for loading image names, scales
+        from microscope and types of particles
 
     Args:
         img_path (path): path to directory with images
@@ -43,6 +37,16 @@ def load_inputs(img_path):
         input_description = json.load(json_file)
 
         for key in input_description:
+            if not input_description[key][0].isdigit():
+                raise Exception("wrong input: size not number")
+
+            input_description[key][1].lower()
+            if (
+                input_description[key][1] != "nanoparticles"
+                and input_description[key][1] != "nanorods"
+            ):
+                raise Exception("wrong input: unknown type")
+
             input_description[key].append(os.path.join(img_path, key))
 
     return input_description
@@ -59,8 +63,11 @@ def loading_img(img_path, scale):
         numpy.ndarray: RGB image
         flaot: size of pixel in raw image
     """
+    try:
+        img_raw = imread(img_path)
+    except:
+        raise Exception("wrong input: image cannot be open")
 
-    img_raw = imread(img_path)
     width = img_raw.shape[1]
 
     line = img_raw[-100:, int(width / 2) :, :]
@@ -78,7 +85,7 @@ def loading_img(img_path, scale):
     return img_raw, pixel_size
 
 
-def filtering_img(img_raw, scale, type, pixel_size):
+def filtering_img(img_raw, scale, np_type, pixel_size):
     """Function for bluring image and edge detection
 
     Args:
@@ -92,18 +99,26 @@ def filtering_img(img_raw, scale, type, pixel_size):
         float: rescaled pixel size
 
     """
-    img_raw = rgb2gray(img_raw)
-    img_raw = rescale(img_raw, 0.5)
+    img = rgb2gray(img_raw)
+
+    if np_type == "nanorods":
+        kernel = disk(3)
+        img = median(img, kernel)
+
+    img = rescale(img, 0.5)
     pixel_size *= 2
 
-    if scale < 200:
-        kernel = morphology.disk(5)
-    else:
-        kernel = morphology.disk(3)
+    if np_type == "nanoparticles":
+        if scale < 200:
+            kernel = disk(7)
+        elif scale < 500:
+            kernel = disk(5)
+        else:
+            kernel = disk(3)
 
-    img_filtered = filters.median(img_raw, kernel)
+        img = median(img, kernel)
 
-    return img_filtered, pixel_size
+    return img, pixel_size
 
 
 def binarizing(img, np_type):
@@ -116,7 +131,6 @@ def binarizing(img, np_type):
     Returns:
         numpy array: binary image
     """
-
     if np_type == "nanoparticles":
         thresh = threshold_minimum(img)
     else:
@@ -124,7 +138,7 @@ def binarizing(img, np_type):
 
     binary = img < thresh
     binary = remove_small_holes(binary)
-    
+
     return binary
 
 
@@ -151,19 +165,74 @@ def watershed_transform(binary):
 
 
 def segmentation(img, binary, np_type, pixel_size):
+    """Function for perform segmentation and calculate sizes
 
+    Args:
+        raw (numpy.ndarray): raw image (three channels)
+        img (numpy.ndarray): gray image (one channel)
+        binary (numpy.ndarray): binary mask
+        np_type (str): nanoparticles or nanorods
+        pixel_size (float): size of one pixel in nm
+
+    Returns:
+        numpy.ndarray, list: labeled image, ist of sizes
+    """
     labels = watershed_transform(binary)
-    sizes, props_watershed = calculation_watershed(labels, pixel_size, np_type)
+    sizes, props_watershed = calculation_watershed(labels, np_type)
     labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
-    props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
-    img, sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
 
-    return img, sizes
+    if np_type == "nanoparticles":
+        props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
+        sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
+    else:
+        sizes[0] = [i * pixel_size for i in sizes[1]]
+        sizes[1] = [i * pixel_size for i in sizes[2]]
+        props_ht = []
+
+    return labels, sizes, props_ht
+
+
+def result_image(raw, labels, np_type, props_ht):
+    """Function for crating result image
+
+    Args:
+        raw (numpy.ndarray): 3-channels raw image
+        labels (numpy.ndarray): labeled image
+        np_type (str)): nanoparticles or nanorods
+        props_ht (list): list of tuples with coordinates
+                        of centers and radii
+
+    Returns:
+        numpy.ndarray: 3-channels result image
+    """
+    max_val = np.max(labels)
+    multiplicator = int(255 / max_val)
+    labels = np.uint8(labels * multiplicator)
+    color_map = plt.get_cmap("nipy_spectral")
+    labels = color_map(labels)
+    img = overlay_images(raw, labels)
+
+    if np_type == "nanoparticles":
+        for x, y, r in props_ht:
+            x *= 2
+            y *= 2
+            r *= 2
+            cv2.circle(img, (x, y), r, (255, 0, 255), 2)
+
+    return img
 
 
 def overlay_images(raw, labels):
+    """Function for overlay labeled image over raw image
 
-    raw = raw/255
+    Args:
+        raw (numpy.ndarray): raw image (three channels)
+        labels (numpy.ndarray): segmented image (three channels)
+
+    Returns:
+        numpy.ndarray: combination of raw image and segment image
+    """
+    raw = raw / 255
     r = rescale(labels[:, :, 0], 2)
     g = rescale(labels[:, :, 1], 2)
     b = rescale(labels[:, :, 2], 2)
@@ -171,50 +240,55 @@ def overlay_images(raw, labels):
     rgb[:, :, 0] = r
     rgb[:, :, 1] = g
     rgb[:, :, 2] = b
-    img = (7*raw + 3*rgb)/10
+    img = (7 * raw + 3 * rgb) / 10
+    img = np.uint8(img * 255)
 
     return img
 
 
-
-def find_duplicity(labels, props_ht, props_watershed, pixel_size):
-    """Function for
+def find_duplicity(labels, props_ht, props_wsh, pixel_size):
+    """Function for eliminate duplicities in properties
 
     Args:
-        labels (_type_): _description_
+        labels (numpy.ndarray):
         props_ht (_type_): _description_
         props_watershed (_type_): _description_
 
     Returns:
         _type_: _description_
     """
-
     size_ht = []
     for cx, cy, r in props_ht:
         val = labels[cy, cx]
-        props_watershed = [i for i in props_watershed if i[0] != val]
-        d = 2*r
+        props_wsh = [i for i in props_wsh if i[0] != val]
+        d = 2 * r
         size_ht.append(d)
 
-    diameter = lambda a: 2 * (a / np.pi)**(1/2)
-    size_watershed = [diameter(i[1]) for i in props_watershed]
-    sizes = size_ht + size_watershed
+    diameter = lambda a: 2 * (a / np.pi) ** (1 / 2)
+    size_wsh = [diameter(i[1]) for i in props_wsh]
+    sizes = size_ht + size_wsh
     sizes = [round(pixel_size * i, 3) for i in sizes]
 
-    max_val = np.max(labels)
-    multiplicator = int(255 / max_val)
-    labels = np.uint8(labels * multiplicator)
-    color_map = plt.get_cmap("nipy_spectral")
-    img = color_map(labels)
-    img, _ = draw_circles(img, props_ht)
-
-    return img, sizes
+    return sizes
 
 
 def find_overlaps(img, binary, sizes, np_type, pixel_size):
+    """Function for finding overlapping particles and perform
+        circle hough transform on found area
 
+    Args:
+        img (numpy.ndarray): gray image
+        binary (numpy.ndarray): binary mask
+        sizes (list): sizes from watershed transform
+        np_type (str): nanoparticles or nanorods
+        pixel_size (float): size of one pixel in nm
+
+    Returns:
+        list: list pf tuples with coordinates of center
+                and radii of hough circles
+    """
     labels = label(binary, background=0)
-    _, props = calculation_watershed(labels, pixel_size, np_type)
+    _, props = calculation_watershed(labels, np_type)
 
     median = calc_median(deepcopy(sizes))
     props_ht = []
@@ -224,12 +298,16 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
             indices = np.argwhere(labels == number)
             x_min = max(np.min(indices[:, 0]) - 10, 0)
             y_min = max(np.min(indices[:, 1]) - 10, 0)
-            x_max = min(np.max(indices[:, 0]) + 10, labels.shape[0]-1)
-            y_max = min(np.max(indices[:, 1]) + 10, labels.shape[1]-1)
+            w = labels.shape[0]
+            h = labels.shape[1]
+            x_max = min(np.max(indices[:, 0]) + 10, w - 1)
+            y_max = min(np.max(indices[:, 1]) + 10, h - 1)
             roi = img[x_min:x_max, y_min:y_max]
+
             circles = hough_segmentation(roi, pixel_size, np_type)
-            _, area = calcultaion_hough_transform(circles, pixel_size, np_type)
+            area = [(r * pixel_size)**2 * np.pi for x, y, r in circles]
             circles = filter_circles(roi, circles, area)
+
             for circle in circles:
                 cx = circle[0] + y_min
                 cy = circle[1] + x_min
@@ -251,8 +329,10 @@ def filter_blobs(labels, sizes, props):
     Returns:
         numpy.ndarray, list: labeled image, list of properties
     """
-
-    median = calc_median(deepcopy(sizes))
+    if type(sizes) is list:
+        median = calc_median(deepcopy(sizes[0]))
+    else:
+        median = calc_median(deepcopy(sizes))
 
     for number, size in props:
         if size < median / 2:
@@ -269,10 +349,9 @@ def hough_segmentation(img, pixel_size, np_type):
         img_filtered (numpy.ndarray): grayscale image
 
     Returns:
-        numpy.ndarray, list: RGB image with plotted circles/elipses,
-                            list of NP parameters
+        numpy.ndarray, list: RGB image with plotted
+                circles/elipses, list of NP parameters
     """
-
     canny_edge = canny(img, sigma=2)
 
     start = max(10, 5 / pixel_size)
@@ -287,31 +366,11 @@ def hough_segmentation(img, pixel_size, np_type):
     y = np.uint16(np.around(y))
     r = np.uint16(np.around(r))
 
-    circles = [(x[i], y[i], r[i]) for i in range(len(x)) if accums[i] > 0.25]
+    a = accums
+    l = len(x)
+    circles = [(x[i], y[i], r[i]) for i in range(l) if a[i] > 0.25]
 
     return circles
-
-
-def draw_circles(img, circles):
-    """Function for plotting circles into original image
-
-    Args:
-        gray (numpy.ndarray): RGB image
-        circles (list): list with tuples with center
-                        indices and radius of circles
-        area (list): list of calculated areas in nm
-
-    Returns:
-        numpy array, list: image with circles,
-                        list with tuples with center
-                        indices and radius of circles
-    """
-
-    for x, y, r in circles:
-        cv2.circle(img, (x, y), r, (255, 0, 255), 1)
-        #cv2.circle(img, (x, y), 1, (0, 0, 0), 2)
-
-    return img, circles
 
 
 def filter_circles(gray, circles, area):
@@ -328,35 +387,43 @@ def filter_circles(gray, circles, area):
         list: list with tuples with center
                         indices and radius of circles
     """
-
     dims = gray.shape
     thresh = threshold_minimum(gray)
 
     i = 0
     j = 0
     first_cycle = True
+
     while j < len(circles):
         if i == len(circles):
             i = 0
             first_cycle = False
+
         cx = int(circles[i][0])
         cy = int(circles[i][1])
         r = int(circles[i][2])
+
         median_area = calc_median(deepcopy(area))
         mean_area = np.mean(area)
+        max_area = max(median_area, mean_area)
+
         if first_cycle:
             pixels = pixels_in_circle(gray, cx, cy, r)
             median_value = calc_median(copy(pixels))
+            bellow_zero = cx - r < 0 or cy - r < 0
+            over_size = cx + r > dims[1] or cy + r > dims[0]
             if median_value > thresh:
                 circles.pop(i)
                 area.pop(i)
-            elif cx - r < 0 or cy - r < 0 or cx + r > dims[1] or cy + r > dims[0]:
+            elif bellow_zero or over_size:
                 circles.pop(i)
                 area.pop(i)
             else:
                 i += 1
         else:
-            if area[i] <= median_area / 1.5 or area[i] <= mean_area / 1.5:
+            smaller = area[i] <= max_area / 1.5
+            bigger = area[i] >= max_area * 3
+            if smaller or bigger:
                 circles.pop(i)
                 area.pop(i)
                 j = 0
@@ -379,7 +446,6 @@ def pixels_in_circle(img, cx, cy, r):
     Returns:
         list: pixel values inside circle
     """
-
     pixels = []
 
     for x in range(img.shape[1]):
@@ -403,21 +469,21 @@ def calc_median(data_list):
     Returns:
         float: median value
     """
-
     n = len(data_list)
     data_list.sort()
     index = int(n / 2)
+    median = data_list[index]
+
     if n % 2 == 0:
-        median = (data_list[index] + data_list[index - 1]) / 2
-    else:
-        median = data_list[index]
+        value = data_list[index - 1]
+        median = (median + value) / 2
 
     return median
 
 
-
 def ploting_img(images, names):
-    """Function for plotting images from segmentation proces
+    """Function for plotting images
+                    from segmentation proces
 
     Args:
         img (numpy.ndarray): image for plotting
@@ -434,11 +500,15 @@ def ploting_img(images, names):
     plt.show()
 
 
-def saving_img(img, file_name, directory="results"):
-    """Function for saving result image into given directory.
+def saving(img, file_name, sizes, np_type,  directory="results"):
+    """Function for saving result image into
+                                    given directory.
 
     Args:
         img (numpy array): labeled image
+        file_name (str): name of current input image file
+        sizes (list): list of sizes in current input
+        np_type (str): nanoparticles or nanorods
         directory (str, optional): path to directory
 
     Returns:
@@ -446,18 +516,46 @@ def saving_img(img, file_name, directory="results"):
     """
     name = re.split("/", file_name)
     res_path = directory + "/" + name[-1]
+    plt.imsave(res_path, img)
 
-    ind = np.argwhere(img == 0)
-    color_map = plt.get_cmap("hsv", lut=(np.amax(img) + 1))
-    img = color_map(img)
-    img = img * 255
-    img[ind[:, 0], ind[:, 1], :] = 0
-    cv2.imwrite(res_path, img)
+    size_path = re.split("\\.", res_path)
+    size_path = size_path[0] + ".txt"
+
+    with open(size_path, 'w') as txt_file:
+        if np_type == 'nanoparticles':
+            avg = sum(sizes) / len(sizes)
+            avg = 'mean diameter: ' + str(avg) + 'nm\n'
+            txt_file.write(avg)
+
+            for size in sizes:
+                curr_size = str(size) + ' nm\n'
+                txt_file.write(curr_size)
+        else:
+            avg_area = sum(sizes[0]) / len(sizes[0])
+            avg_area = 'mean area: ' + str(avg_area) + 'nm^2\n'
+            txt_file.write(avg_area)
+
+            avg_major = sum(sizes[1]) / len(sizes[1])
+            avg_major = 'mean major axis length: ' + str(avg_major) + 'nm\n'
+            txt_file.write(avg_major)
+
+            avg_minor = sum(sizes[2]) / len(sizes[2])
+            avg_minor = 'mean minor axis length: ' + str(avg_minor) + 'nm\n'
+            txt_file.write(avg_minor)
+
+            header = 'area, major_axis, minor_axis\n'
+            txt_file.write(header)
+
+            for i in range(len(sizes[0])):
+                line = [str(sizes[0][i]), str(sizes[1][i]), str(sizes[2][i])]
+                line = ' '.join(line) + '\n'
+                txt_file.write(line)
+
 
     return res_path
 
 
-def calculation_watershed(labeled, pixel_size, np_type):
+def calculation_watershed(labeled, np_type):
     """Calculation of mean radius and area of NP.
 
     Args:
@@ -466,15 +564,16 @@ def calculation_watershed(labeled, pixel_size, np_type):
         np_type (string): nanoparticles or nanorods
 
     Returns:
-        _type_: _description_
+        list, list: list of sizes, list of tuples
+                    with label and size
     """
-
-    if np_type.lower() == "nanoparticles":
+    if np_type == "nanoparticles":
         props = regionprops_table(
             labeled, properties=["label", "area_convex", "equivalent_diameter_area"]
         )
+        sizes = props["area_convex"]
 
-    if np_type.lower() == "nanorods":
+    else:
         props = regionprops_table(
             labeled,
             properties=[
@@ -484,34 +583,17 @@ def calculation_watershed(labeled, pixel_size, np_type):
                 "axis_minor_length",
             ],
         )
+        sizes = [
+            props["area_convex"],
+            props["axis_major_length"],
+            props["axis_minor_length"],
+        ]
 
-    avg = sum(props["area_convex"]) / len(props["area_convex"])
-    diameter = 2 * (avg / np.pi) ** (1 / 2)
-
-    selected = [
-        (props["label"][i], props["area_convex"][i]) for i in range(len(props["label"]))
-    ]
-    sizes = props["area_convex"]
+    labels = props["label"]
+    area = props["area_convex"]
+    selected = [(labels[i], area[i]) for i in range(len(labels))]
 
     return sizes, selected
-
-
-def calcultaion_hough_transform(circles, pixel_size, np_type):
-    """Calculation of NP mean area and radius.
-
-    Args:
-        circles (list): list of NP parameters
-        pixel_size (float): size of one pixel in nm
-        np_type (string): nanoparticles or nanorods
-
-    Returns:
-        float, float: mean diameter and mean area of NP
-    """
-
-    diameter = [r * 2 * pixel_size for x, y, r in circles]
-    area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
-
-    return diameter, area
 
 
 def histogram_sizes(sizes, file_name, np_type):
@@ -520,11 +602,10 @@ def histogram_sizes(sizes, file_name, np_type):
     Args:
         sizes (list): list of NP sizes
     """
-
     file_name = file_name[:-4] + "hist" + file_name[-4:]
 
     if np_type == "nanoparticles":
-        plt.hist(sizes)
+        plt.hist(sizes, bins=10, color="brown", edgecolor="black")
         plt.title("Histogram of sizes of NPs")
         plt.xlabel("diameter [nm]")
         plt.ylabel("frequency")
@@ -532,8 +613,8 @@ def histogram_sizes(sizes, file_name, np_type):
         plt.clf()
 
     elif np_type == "nanorods":
-        plt.hist(sizes[0])
-        plt.hist(sizes[1])
+        plt.hist(sizes[0], bins=10, color="forestgreen", edgecolor="black")
+        plt.hist(sizes[1], bins=10, color="brown", edgecolor="black")
         plt.legend(["major axis", "minor axis"])
         plt.title("Histogram of sizes of NRs")
         plt.xlabel("axis length [nm]")
@@ -546,9 +627,9 @@ def read_args():
     """Function for command line arguments
 
     Returns:
-        dictionary: path to image folder and method of segmentation
+        dictionary: path to image folder and
+                            method of segmentation
     """
-
     parser = argparse.ArgumentParser(
         description="segmentation of NPs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -569,8 +650,8 @@ def read_args():
         help="segmentation method (default: watershed)",
     )
     parser.add_argument(
-        "-g",
-        "--graph",
+        "-s",
+        "--show",
         type=bool,
         default=False,
         help="Plotting image (default: False)",
@@ -587,7 +668,7 @@ if __name__ == "__main__":
 
     input_description = load_inputs(config["path"])
     method = config["method"]
-    graph = config["graph"]
+    show = config["show"]
 
     if method != "watershed":
         raise Exception("unknown method")
@@ -602,24 +683,19 @@ if __name__ == "__main__":
 
         img_raw, pixel_size = loading_img(img_path, scale)
         img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
-        binary = binarizing(img_filtered, pixel_size)
-
-        if np_type == 'nanoparticles':
-            labels, sizes = segmentation(img_filtered, binary, np_type, pixel_size)
-        elif np_type == 'nanorods':
-            pass
-        else:
-            raise Exception("Invalid NP type")
-
-        img = overlay_images(img_raw, labels)
+        binary = binarizing(img_filtered, np_type)
+        labels, sizes, props_ht = segmentation(
+            img_filtered, binary, np_type, pixel_size
+        )
+        img = result_image(img_raw, labels, np_type, props_ht)
 
         images.append(img)
         names.append(img_path)
 
-        file_name = saving_img(img, img_path)
+        file_name = saving(img, img_path, sizes, np_type)
         histogram_sizes(sizes, file_name, np_type)
 
         print("saving into:", file_name)
-        
-    if graph == True:
+
+    if show == True:
         ploting_img(images, names)

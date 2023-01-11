@@ -305,7 +305,7 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
             roi = img[x_min:x_max, y_min:y_max]
 
             circles = hough_segmentation(roi, pixel_size, np_type)
-            area = [(r * pixel_size)**2 * np.pi for x, y, r in circles]
+            area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
             circles = filter_circles(roi, circles, area)
 
             for circle in circles:
@@ -500,7 +500,7 @@ def ploting_img(images, names):
     plt.show()
 
 
-def saving(img, file_name, sizes, np_type,  directory="results"):
+def saving(img, file_name, sizes, np_type, directory="results"):
     """Function for saving result image into
                                     given directory.
 
@@ -521,36 +521,35 @@ def saving(img, file_name, sizes, np_type,  directory="results"):
     size_path = re.split("\\.", res_path)
     size_path = size_path[0] + ".txt"
 
-    with open(size_path, 'w') as txt_file:
-        if np_type == 'nanoparticles':
+    with open(size_path, "w") as txt_file:
+        if np_type == "nanoparticles":
             avg = sum(sizes) / len(sizes)
-            avg = 'mean diameter: ' + str(avg) + 'nm\n'
+            avg = "mean diameter: " + str(avg) + "nm\n"
             txt_file.write(avg)
 
             for size in sizes:
-                curr_size = str(size) + ' nm\n'
+                curr_size = str(size) + " nm\n"
                 txt_file.write(curr_size)
         else:
             avg_area = sum(sizes[0]) / len(sizes[0])
-            avg_area = 'mean area: ' + str(avg_area) + 'nm^2\n'
+            avg_area = "mean area: " + str(avg_area) + "nm^2\n"
             txt_file.write(avg_area)
 
             avg_major = sum(sizes[1]) / len(sizes[1])
-            avg_major = 'mean major axis length: ' + str(avg_major) + 'nm\n'
+            avg_major = "mean major axis length: " + str(avg_major) + "nm\n"
             txt_file.write(avg_major)
 
             avg_minor = sum(sizes[2]) / len(sizes[2])
-            avg_minor = 'mean minor axis length: ' + str(avg_minor) + 'nm\n'
+            avg_minor = "mean minor axis length: " + str(avg_minor) + "nm\n"
             txt_file.write(avg_minor)
 
-            header = 'area, major_axis, minor_axis\n'
+            header = "area, major_axis, minor_axis\n"
             txt_file.write(header)
 
             for i in range(len(sizes[0])):
                 line = [str(sizes[0][i]), str(sizes[1][i]), str(sizes[2][i])]
-                line = ' '.join(line) + '\n'
+                line = " ".join(line) + "\n"
                 txt_file.write(line)
-
 
     return res_path
 
@@ -639,22 +638,22 @@ def read_args():
         "-p",
         "--path",
         type=str,
-        default="images",
-        help="path to images (default: images)",
+        default="data",
+        help="path to images (default: data)"
     )
     parser.add_argument(
         "-m",
         "--method",
         type=str,
         default="watershed",
-        help="segmentation method (default: watershed)",
+        help="segmentation method (default: watershed)"
     )
     parser.add_argument(
         "-s",
         "--show",
         type=bool,
         default=False,
-        help="Plotting image (default: False)",
+        help="Plotting image (default: False)"
     )
     args = parser.parse_args()
     config = vars(args)

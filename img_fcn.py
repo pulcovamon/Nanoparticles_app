@@ -28,10 +28,14 @@ def load_inputs(img_path):
     Returns:
         dict: dictionary with path to images, scales and types
     """
-    for root, dirs, files in os.walk(img_path):
+    for _, dirs, files in os.walk(img_path):
+        json_found = False
         for file in files:
             if file.endswith(".json"):
+                if json_found:
+                    raise Exception('multiple input descriptions')
                 json_path = img_path + "/" + file
+                json_found = True
 
     with open(json_path) as json_file:
         input_description = json.load(json_file)
@@ -102,7 +106,10 @@ def filtering_img(img_raw, scale, np_type, pixel_size):
     img = rgb2gray(img_raw)
 
     if np_type == "nanorods":
-        kernel = disk(3)
+        if scale < 200:
+            kernel = disk(5)
+        else:
+            kernel = disk(3)
         img = median(img, kernel)
 
     img = rescale(img, 0.5)
@@ -331,13 +338,21 @@ def filter_blobs(labels, sizes, props):
     """
     if type(sizes) is list:
         median = calc_median(deepcopy(sizes[0]))
+        mean = sum(sizes[0]) / len(sizes[0])
     else:
         median = calc_median(deepcopy(sizes))
+        mean = sum(sizes) / len(sizes)
+    
+    avg = max(mean, median)
 
-    for number, size in props:
-        if size < median / 2:
-            props.remove((number, size))
-            labels[labels == number] = 0
+    i = 0
+    while i < len(props):
+        smaller = props[i][1] < avg / 1.5
+        if smaller:
+            labels[labels == props[i][0]] = 0
+            props.remove((props[i][0], props[i][1]))
+        else:
+            i += 1
 
     return labels, props
 

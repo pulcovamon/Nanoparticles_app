@@ -29,6 +29,12 @@ class MainWindow(QMainWindow):
         self.home.triggered.connect(self.home_window)
         toolbar.addAction(self.home)
 
+        self.images_res = QAction(QIcon('image_icon.png'),
+                                    'Images', self)
+        self.images_res.triggered.connect(self.img_window)
+        self.images_res.setDisabled(True)
+        toolbar.addAction(self.images_res)
+
         self.histogram = QAction(QIcon('hist.png'),
                                     'Histogram', self)
         self.histogram.triggered.connect(self.hist_window)
@@ -40,9 +46,6 @@ class MainWindow(QMainWindow):
         self.help.triggered.connect(self.help_window)
         toolbar.addAction(self.help)
 
-        self.show_more = QAction(QIcon('show.png'),
-                                    'show more', self)
-        toolbar.addAction(self.show_more)
 
         main_layout = QWidget()
         self.setCentralWidget(main_layout)
@@ -50,15 +53,17 @@ class MainWindow(QMainWindow):
         self.stack1 = QWidget()
         self.stack2 = QWidget()
         self.stack3 = QWidget()
+        self.stack4 = QWidget()
 
         self.stack1UI()
         self.stack2UI()
         self.stack3UI()
             
-        self.Stack = QStackedWidget (self)
-        self.Stack.addWidget (self.stack1)
-        self.Stack.addWidget (self.stack2)
-        self.Stack.addWidget (self.stack3)
+        self.Stack = QStackedWidget(self)
+        self.Stack.addWidget(self.stack1)
+        self.Stack.addWidget(self.stack2)
+        self.Stack.addWidget(self.stack3)
+        self.Stack.addWidget(self.stack4)
             
         hbox = QHBoxLayout(main_layout)
         hbox.addWidget(self.Stack)
@@ -70,11 +75,14 @@ class MainWindow(QMainWindow):
     def home_window(self):
         self.Stack.setCurrentIndex(0)
 
-    def hist_window(self):
+    def img_window(self):
         self.Stack.setCurrentIndex(1)
 
-    def help_window(self):
+    def hist_window(self):
         self.Stack.setCurrentIndex(2)
+
+    def help_window(self):
+        self.Stack.setCurrentIndex(3)
 
             
     def stack1UI(self):
@@ -87,39 +95,12 @@ class MainWindow(QMainWindow):
         layout.addWidget(title, 0, 0, 2, 6,
                                 Qt.AlignmentFlag.AlignTop)
 
-        self.add_img = QPushButton('Add image')
+        self.add_img = QPushButton('Analyze')
         self.add_img.clicked.connect(self.add_img_fcn)
         self.add_img.setFixedSize(300, 40)
         layout.addWidget(self.add_img, 2, 1, 1, 4,
                             Qt.AlignmentFlag.AlignCenter)
 
-        self.process = QPushButton('Segment image')
-        self.process.clicked.connect(self.processing)
-        self.process.setDisabled(True)
-        self.process.setFixedSize(300, 40)
-        layout.addWidget(self.process, 2, 5, 1, 4,
-                            Qt.AlignmentFlag.AlignCenter)
-
-        self.calculation = QPushButton('Calculate', self)
-        self.calculation.clicked.connect(self.calculation_fcn)
-        self.calculation.setDisabled(True)
-        self.calculation.setFixedSize(300, 40)
-        layout.addWidget(self.calculation, 3, 3, 1, 4,
-                            Qt.AlignmentFlag.AlignCenter)
-
-        self.img = QLabel(self)
-        self.img.setPixmap(QPixmap())
-        self.img.setFixedSize(300, 300)
-        self.img.setScaledContents(True)
-        layout.addWidget(self.img, 4, 1, 4, 4,
-                            Qt.AlignmentFlag.AlignCenter)
-
-        self.labeled = QLabel(self)
-        self.labeled.setPixmap(QPixmap())
-        self.labeled.setFixedSize(300, 300)
-        self.labeled.setScaledContents(True)
-        layout.addWidget(self.labeled, 4, 5, 4, 4,
-                            Qt.AlignmentFlag.AlignCenter)
 
         self.avg_size = QLabel('')
         self.avg_size.setProperty('class', '.normal')
@@ -148,6 +129,10 @@ class MainWindow(QMainWindow):
 
 
     def stack3UI(self):
+        pass
+
+
+    def stack4UI(self):
         layout = QFormLayout()
         title = QLabel('Documentation')
         title.setProperty('class', 'heading')
@@ -158,7 +143,7 @@ class MainWindow(QMainWindow):
         text.setWordWrap(True)
         layout.addWidget(text)
             
-        self.stack3.setLayout(layout)
+        self.stack4.setLayout(layout)
 
 
     def add_img_fcn(self):
@@ -172,39 +157,6 @@ class MainWindow(QMainWindow):
             self.img.setScaledContents(True)
 
             self.process.setDisabled(False)
-
-
-
-    def processing(self):
-       
-        img = img_fcn.loading_img(self.fname[0])
-        binary = img_fcn.filtering_img(img)
-        self.labels, _ = img_fcn.watershed_transform(
-                                    binary)
-
-        filename = img_fcn.saving_img(self.labels)
-        self.calculation.setDisabled(False)
-
-        pixmap = QPixmap(filename)
-        self.labeled.setPixmap(pixmap)
-        self.labeled.setFixedSize(300, 300)
-        self.labeled.setScaledContents(True)
-
-
-    def calculation_fcn(self):
-        calc_window = calculate_window(self, self.labels)
-        calc_window.show()
-        calc_window.exec()
-
-        if calc_window.avg:
-            self.avg_size.setText('Average NP area is '
-                    + str(calc_window.avg) + 'px.')
-            self.histogram.setDisabled(False)
-
-            pixmap = QPixmap('histogram.png')
-            self.hist.setPixmap(pixmap)
-            self.hist.setFixedSize(600, 400)
-            self.hist.setScaledContents(True)
 
 
 

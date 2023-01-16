@@ -1,3 +1,4 @@
+"""Co celý modul dělá ve zkratce"""
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -33,25 +34,25 @@ def load_inputs(img_path):
         for file in files:
             if file.endswith(".json"):
                 if json_found:
-                    raise Exception('multiple input descriptions')
-                json_path = img_path + "/" + file
+                    raise Exception("multiple input descriptions")
+                json_path = img_path + "/" + file   #path.join
                 json_found = True
 
-    with open(json_path) as json_file:
+    with open(json_path, mode='r') as json_file:
         input_description = json.load(json_file)
 
-        for key in input_description:
-            if not input_description[key][0].isdigit():
-                raise Exception("wrong input: size not number")
+    for key in input_description.keys():
+        if not input_description[key][0].isdigit():
+            raise Exception("wrong input: size not number")
 
-            input_description[key][1].lower()
-            if (
-                input_description[key][1] != "nanoparticles"
-                and input_description[key][1] != "nanorods"
-            ):
-                raise Exception("wrong input: unknown type")
+        input_description[key][1].lower()
+        if (
+            input_description[key][1] != "nanoparticles"
+            and input_description[key][1] != "nanorods"
+        ):
+            raise Exception("wrong input: unknown type")
 
-            input_description[key].append(os.path.join(img_path, key))
+        input_description[key].append(os.path.join(img_path, key))
 
     return input_description
 
@@ -69,7 +70,8 @@ def loading_img(img_path, scale):
     """
     try:
         img_raw = imread(img_path)
-    except:
+    except Exception as err:
+        print(err)
         raise Exception("wrong input: image cannot be open")
 
     width = img_raw.shape[1]
@@ -126,6 +128,10 @@ def filtering_img(img_raw, scale, np_type, pixel_size):
         img = median(img, kernel)
 
     return img, pixel_size
+
+
+def background(img):
+    ...
 
 
 def binarizing(img, np_type):
@@ -254,7 +260,7 @@ def overlay_images(raw, labels):
 
 
 def find_duplicity(labels, props_ht, props_wsh, pixel_size):
-    """Function for eliminate duplicities in properties
+    """Eliminate duplicities in properties
 
     Args:
         labels (numpy.ndarray):
@@ -280,7 +286,7 @@ def find_duplicity(labels, props_ht, props_wsh, pixel_size):
 
 
 def find_overlaps(img, binary, sizes, np_type, pixel_size):
-    """Function for finding overlapping particles and perform
+    """Find overlapping particles and perform
         circle hough transform on found area
 
     Args:
@@ -340,9 +346,9 @@ def filter_blobs(labels, sizes, props):
         median = calc_median(deepcopy(sizes[0]))
         mean = sum(sizes[0]) / len(sizes[0])
     else:
-        median = calc_median(deepcopy(sizes))
+        median = calc_median(deepcopy(sizes)) # remove unneeded deepcopz
         mean = sum(sizes) / len(sizes)
-    
+
     avg = max(mean, median)
 
     i = 0
@@ -375,7 +381,7 @@ def hough_segmentation(img, pixel_size, np_type):
     hough_res = hough_circle(canny_edge, hough_radii)
 
     accums, x, y, r = hough_circle_peaks(
-        hough_res, hough_radii, min_xdistance=int(10), min_ydistance=int(10)
+        hough_res, hough_radii, min_xdistance=int(10), min_ydistance=int(10) # remove int() if variable is not used
     )
     x = np.uint16(np.around(x))
     y = np.uint16(np.around(y))
@@ -539,7 +545,7 @@ def saving(img, file_name, sizes, np_type, directory="results"):
     with open(size_path, "w") as txt_file:
         if np_type == "nanoparticles":
             avg = sum(sizes) / len(sizes)
-            avg = "mean diameter: " + str(avg) + "nm\n"
+            avg = f"mean diameter: {avg} nm\n"
             txt_file.write(avg)
 
             for size in sizes:
@@ -564,7 +570,7 @@ def saving(img, file_name, sizes, np_type, directory="results"):
             for i in range(len(sizes[0])):
                 line = [str(sizes[0][i]), str(sizes[1][i]), str(sizes[2][i])]
                 line = " ".join(line) + "\n"
-                txt_file.write(line)
+                txt_file.write(line) # writrline instead of write
 
     return res_path
 
@@ -605,7 +611,7 @@ def calculation_watershed(labeled, np_type):
 
     labels = props["label"]
     area = props["area_convex"]
-    selected = [(labels[i], area[i]) for i in range(len(labels))]
+    selected = [(labels[i], area[i]) for i in range(len(labels))] # zip(labels, area, restrictive=True)
 
     return sizes, selected
 
@@ -650,25 +656,17 @@ def read_args():
     )
 
     parser.add_argument(
-        "-p",
-        "--path",
-        type=str,
-        default="data",
-        help="path to images (default: data)"
+        "-p", "--path", type=str, default="data", help="path to images (default: data)"
     )
     parser.add_argument(
         "-m",
         "--method",
         type=str,
         default="watershed",
-        help="segmentation method (default: watershed)"
+        help="segmentation method (default: watershed)",
     )
     parser.add_argument(
-        "-s",
-        "--show",
-        type=bool,
-        default=False,
-        help="Plotting image (default: False)"
+        "-s", "--show", type=bool, default=False, help="Plotting image (default: False)"
     )
     args = parser.parse_args()
     config = vars(args)
@@ -677,7 +675,31 @@ def read_args():
     return config
 
 
-if __name__ == "__main__":
+def image_analysis(input_description, image, images, names):
+
+    scale = int(input_description[image][0])
+    np_type = input_description[image][1]
+    img_path = input_description[image][2]
+
+    img_raw, pixel_size = loading_img(img_path, scale)
+    img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
+    binary = binarizing(img_filtered, np_type)
+    labels, sizes, props_ht = segmentation(
+        img_filtered, binary, np_type, pixel_size
+    )
+    img = result_image(img_raw, labels, np_type, props_ht)
+
+    images.append(img)
+    names.append(img_path)
+
+    file_name = saving(img, img_path, sizes, np_type)
+    histogram_sizes(sizes, file_name, np_type)
+
+    print("saving into:", file_name)
+
+
+def get_config():
+
     config = read_args()
 
     input_description = load_inputs(config["path"])
@@ -687,29 +709,17 @@ if __name__ == "__main__":
     if method != "watershed":
         raise Exception("unknown method")
 
+    return input_description, method, show
+
+
+if __name__ == "__main__":
+    input_description, _, show = get_config()
+
     images = []
     names = []
 
     for image in input_description:
-        scale = int(input_description[image][0])
-        np_type = input_description[image][1]
-        img_path = input_description[image][2]
+        image_analysis(input_description, image, images, names)
 
-        img_raw, pixel_size = loading_img(img_path, scale)
-        img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
-        binary = binarizing(img_filtered, np_type)
-        labels, sizes, props_ht = segmentation(
-            img_filtered, binary, np_type, pixel_size
-        )
-        img = result_image(img_raw, labels, np_type, props_ht)
-
-        images.append(img)
-        names.append(img_path)
-
-        file_name = saving(img, img_path, sizes, np_type)
-        histogram_sizes(sizes, file_name, np_type)
-
-        print("saving into:", file_name)
-
-    if show == True:
+    if show:
         ploting_img(images, names)

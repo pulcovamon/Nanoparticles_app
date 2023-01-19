@@ -3,7 +3,8 @@ from PyQt6.QtWidgets import (
     QApplication, QLabel, QPushButton, QGridLayout,
     QWidget, QLineEdit, QFileDialog, QMainWindow,
     QComboBox, QToolBar, QDialog, QStackedWidget,
-    QFormLayout, QHBoxLayout, QVBoxLayout
+    QFormLayout, QHBoxLayout, QVBoxLayout,
+    QSpinBox
 )
 from PyQt6.QtGui import (
     QPixmap, QDoubleValidator
@@ -19,33 +20,31 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.setWindowTitle('Nanoparticles app')
-        self.setWindowIcon(QIcon('icon.png'))
+        self.setWindowIcon(QIcon('icons/icon.png'))
 
         toolbar = QToolBar('Actions')
         toolbar.setIconSize(QSize(25, 25))
         self.addToolBar(toolbar)
 
-        self.home = QAction(QIcon('home.png'), 'Home', self)
+        self.home = QAction(QIcon('icons/home.png'), 'Home', self)
         self.home.triggered.connect(self.home_window)
         toolbar.addAction(self.home)
 
-        self.images_res = QAction(QIcon('image_icon.png'),
-                                    'Images', self)
-        self.images_res.triggered.connect(self.img_window)
-        self.images_res.setDisabled(True)
-        toolbar.addAction(self.images_res)
+        self.l_image = QAction(QIcon('icons/image_icon.png'), 'Labeled image', self)
+        self.l_image.triggered.connect(self.labeled_window)
+        self.l_image.setDisabled(True)
+        toolbar.addAction(self.l_image)
 
-        self.histogram = QAction(QIcon('hist.png'),
+        self.histogram = QAction(QIcon('icons/hist.png'),
                                     'Histogram', self)
         self.histogram.triggered.connect(self.hist_window)
         self.histogram.setDisabled(True)
         toolbar.addAction(self.histogram)
 
-        self.help = QAction(QIcon('help.png'),
+        self.help = QAction(QIcon('icons/help.png'),
                                         'help', self)
         self.help.triggered.connect(self.help_window)
         toolbar.addAction(self.help)
-
 
         main_layout = QWidget()
         self.setCentralWidget(main_layout)
@@ -58,12 +57,13 @@ class MainWindow(QMainWindow):
         self.stack1UI()
         self.stack2UI()
         self.stack3UI()
+        self.stack4UI()
             
-        self.Stack = QStackedWidget(self)
-        self.Stack.addWidget(self.stack1)
-        self.Stack.addWidget(self.stack2)
-        self.Stack.addWidget(self.stack3)
-        self.Stack.addWidget(self.stack4)
+        self.Stack = QStackedWidget (self)
+        self.Stack.addWidget (self.stack1)
+        self.Stack.addWidget (self.stack2)
+        self.Stack.addWidget (self.stack3)
+        self.Stack.addWidget (self.stack4)
             
         hbox = QHBoxLayout(main_layout)
         hbox.addWidget(self.Stack)
@@ -75,10 +75,10 @@ class MainWindow(QMainWindow):
     def home_window(self):
         self.Stack.setCurrentIndex(0)
 
-    def img_window(self):
+    def hist_window(self):
         self.Stack.setCurrentIndex(1)
 
-    def hist_window(self):
+    def labeled_window(self):
         self.Stack.setCurrentIndex(2)
 
     def help_window(self):
@@ -95,16 +95,57 @@ class MainWindow(QMainWindow):
         layout.addWidget(title, 0, 0, 2, 6,
                                 Qt.AlignmentFlag.AlignTop)
 
-        self.add_img = QPushButton('Analyze')
+        self.add_img = QPushButton('Upload image')
         self.add_img.clicked.connect(self.add_img_fcn)
-        self.add_img.setFixedSize(300, 40)
-        layout.addWidget(self.add_img, 2, 1, 1, 4,
+        self.add_img.setFixedSize(400, 40)
+        layout.addWidget(self.add_img, 2, 0, 1, 7,
                             Qt.AlignmentFlag.AlignCenter)
 
+        self.process = QPushButton('Segment image')
+        self.process.clicked.connect(self.processing)
+        self.process.setDisabled(True)
+        self.process.setFixedSize(400, 40)
+        layout.addWidget(self.process, 2, 7, 1, 7,
+                            Qt.AlignmentFlag.AlignCenter)
+
+        self.img = QLabel(self)
+        self.img.setPixmap(QPixmap())
+        self.img.setFixedSize(400, 400)
+        self.img.setScaledContents(True)
+        layout.addWidget(self.img, 3, 0, 7, 7,
+                            Qt.AlignmentFlag.AlignCenter)
+
+        type_text = QLabel('Particle type:')
+        layout.addWidget(type_text, 4, 8, 1, 2)
+
+        self.type_w = QComboBox()
+        self.type_w.addItem('nanoparticles')
+        self.type_w.addItem('nanorods')
+        layout.addWidget(self.type_w, 4, 10, 1, 3,
+                            Qt.AlignmentFlag.AlignCenter)
+
+        scale_text = QLabel('Image scale:')
+        layout.addWidget(scale_text, 6, 8, 1, 2)
+
+        self.scale_w = QSpinBox()
+        self.scale_w.setValue(20)
+        self.scale_w.setMinimum(10)
+        self.scale_w.setMaximum(1000)
+        self.scale_w.setSingleStep(10)
+        layout.addWidget(self.scale_w, 6, 10, 1, 2,
+                            Qt.AlignmentFlag.AlignCenter)
+
+        nm = QLabel('nm')
+        layout.addWidget(nm, 6, 12, 1, 1)
 
         self.avg_size = QLabel('')
         self.avg_size.setProperty('class', '.normal')
-        layout.addWidget(self.avg_size, 8, 1, 1, 7,
+        layout.addWidget(self.avg_size, 11, 1, 1, 12,
+                            Qt.AlignmentFlag.AlignCenter)
+
+        self.avg_size2 = QLabel('')
+        self.avg_size2.setProperty('class', '.normal')
+        layout.addWidget(self.avg_size2, 10, 1, 1, 12,
                             Qt.AlignmentFlag.AlignCenter)
 
         self.stack1.setLayout(layout)
@@ -120,7 +161,7 @@ class MainWindow(QMainWindow):
 
         self.hist = QLabel(self)
         self.hist.setPixmap(QPixmap())
-        self.hist.setFixedSize(600, 400)
+        self.hist.setFixedSize(800, 500)
         self.hist.setScaledContents(True)
         self.hist.move(100, 100)
         layout.addWidget(self.hist)
@@ -128,22 +169,33 @@ class MainWindow(QMainWindow):
         self.stack2.setLayout(layout)
 
 
-    def stack3UI(self):
-        pass
-
-
     def stack4UI(self):
         layout = QFormLayout()
-        title = QLabel('Documentation')
+        title = QLabel('About this app')
         title.setProperty('class', 'heading')
         layout.addWidget(title)
 
-        text = QLabel('How to use this app.')
+        text = QLabel('About this app.')
         text.set:property('class', 'normal')
         text.setWordWrap(True)
         layout.addWidget(text)
             
         self.stack4.setLayout(layout)
+
+
+    def stack3UI(self):
+        layout = QFormLayout()
+        title = QLabel('Labeled image')
+        title.setProperty('class', 'heading')
+        layout.addWidget(title)
+
+        self.labeled = QLabel(self)
+        self.labeled.setPixmap(QPixmap())
+        self.labeled.setFixedSize(600, 600)
+        self.labeled.setScaledContents(True)
+        layout.addWidget(self.labeled)
+
+        self.stack3.setLayout(layout)
 
 
     def add_img_fcn(self):
@@ -153,67 +205,43 @@ class MainWindow(QMainWindow):
         if self.fname[0]:
             pixmap = QPixmap(self.fname[0])
             self.img.setPixmap(pixmap)
-            self.img.setFixedSize(300, 300)
+            self.img.setFixedSize(400, 400)
             self.img.setScaledContents(True)
 
             self.process.setDisabled(False)
 
 
 
-
-
-       
-class calculate_window(QDialog):
-    def __init__(self, parent, labels):
-        super().__init__(parent)
-
-        self.setWindowTitle('Calculations')
-
-        layout = QGridLayout()
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(10)
-        self.setLayout(layout)
-
-        self.labels = labels
-        self.avg = None
+    def processing(self):
         
-        layout.addWidget(QLabel('Insert scale:'), 0, 0, 1, 2)
-        self.scale = QLineEdit()
-        self.scale.textEdited.connect(self.scale_fcn)
-        self.scale.setValidator(QDoubleValidator(0, 1000, 0))
-        self.scale.setFixedWidth(50)
-        layout.addWidget(self.scale, 0, 3)
-        layout.addWidget(QLabel('nm'), 0, 4)
+        np_type = self.type_w.currentText()
+        scale = self.scale_w.value()
+        input_desc = {'image': [scale, np_type, self.fname[0]]}
 
-        self.type_np = QComboBox()
-        self.type_np.addItem('Nanoparticles')
-        self.type_np.addItem('Nanorods')
-        layout.addWidget(self.type_np, 1, 0, 1, 4,
-                            Qt.AlignmentFlag.AlignCenter)
+        labeledf, histf, sizesf = img_fcn.image_analysis(input_desc, 'image')
 
-        self.shortcut = QShortcut(QKeySequence('Enter'), self)
-        self.shortcut.setEnabled(False)
-        self.shortcut.activated.connect(self.calculation_fcn)
+        pixmap = QPixmap(labeledf)
+        self.labeled.setPixmap(pixmap)
+        self.labeled.setFixedSize(600, 600)
+        self.labeled.setScaledContents(True)
 
-        self.calculate = QPushButton('Calculate')
-        self.calculate.setDisabled(True)
-        self.calculate.clicked.connect(self.calculation_fcn)
-        self.calculate.setFixedSize(QSize(300, 30))
-        layout.addWidget(self.calculate, 2, 0, 1, 4,
-                            Qt.AlignmentFlag.AlignCenter)
+        pixmap = QPixmap(histf)
+        self.hist.setPixmap(pixmap)
+        self.hist.setFixedSize(800, 500)
+        self.hist.setScaledContents(True)
 
+        self.histogram.setDisabled(False)
+        self.l_image.setDisabled(False)
 
-    def scale_fcn(self):
-        if self.scale.text():
-            self.calculate.setDisabled(False)
-            self.shortcut.setEnabled(True)
+        with open(sizesf, mode='r') as txt_file:
+            sizes = txt_file.readlines()
 
-    def calculation_fcn(self):
-        type_text = str(self.type_np.currentText())
-        self.avg = img_fcn.calculation(
-                self.labels, self.scale.text(), type_text)
-
-        self.close()
+        if np_type == 'nanoparticles':
+            self.avg_size.setText(sizes[0])
+        elif np_type == 'nanorods':
+            self.avg_size.setText(sizes[2])
+            self.avg_size2.setText(sizes[1])
+          
 
             
 if __name__ == "__main__":

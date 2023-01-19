@@ -1,4 +1,4 @@
-mean diameter: 30.266000000000002nm
+mean diameter: 30.266000000000002 nm
 9.816 nm
 39.264 nm
 36.81 nm

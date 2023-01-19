@@ -18,6 +18,13 @@ QWidget {
     font-family: 'Lucida Console';
 }
 
+QMainWindow {
+    background-color: #252327;
+    color: "white";
+    font-family: 'Lucida Console';
+}
+
+
 QLineEdit {
     background-color: #dbdbdb;
     color: 'black';

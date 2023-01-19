@@ -544,7 +544,7 @@ def saving(img, file_name, sizes, np_type, directory="results"):
 
     with open(size_path, "w") as txt_file:
         if np_type == "nanoparticles":
-            avg = sum(sizes) / len(sizes)
+            avg = round(sum(sizes) / len(sizes), 3)
             avg = f"mean diameter: {avg} nm\n"
             txt_file.write(avg)
 
@@ -552,15 +552,15 @@ def saving(img, file_name, sizes, np_type, directory="results"):
                 curr_size = str(size) + " nm\n"
                 txt_file.write(curr_size)
         else:
-            avg_area = sum(sizes[0]) / len(sizes[0])
+            avg_area = round(sum(sizes[0]) / len(sizes[0]), 3)
             avg_area = "mean area: " + str(avg_area) + "nm^2\n"
             txt_file.write(avg_area)
 
-            avg_major = sum(sizes[1]) / len(sizes[1])
+            avg_major = round(sum(sizes[1]) / len(sizes[1]), 3)
             avg_major = "mean major axis length: " + str(avg_major) + "nm\n"
             txt_file.write(avg_major)
 
-            avg_minor = sum(sizes[2]) / len(sizes[2])
+            avg_minor = round(sum(sizes[2]) / len(sizes[2]), 3)
             avg_minor = "mean minor axis length: " + str(avg_minor) + "nm\n"
             txt_file.write(avg_minor)
 
@@ -572,7 +572,7 @@ def saving(img, file_name, sizes, np_type, directory="results"):
                 line = " ".join(line) + "\n"
                 txt_file.write(line) # writrline instead of write
 
-    return res_path
+    return res_path, size_path
 
 
 def calculation_watershed(labeled, np_type):
@@ -642,6 +642,8 @@ def histogram_sizes(sizes, file_name, np_type):
         plt.savefig(file_name)
         plt.clf()
 
+    return file_name
+
 
 def read_args():
     """Function for command line arguments
@@ -675,7 +677,7 @@ def read_args():
     return config
 
 
-def image_analysis(input_description, image, images, names):
+def image_analysis(input_description, image, images=None, names=None):
 
     scale = int(input_description[image][0])
     np_type = input_description[image][1]
@@ -689,13 +691,16 @@ def image_analysis(input_description, image, images, names):
     )
     img = result_image(img_raw, labels, np_type, props_ht)
 
-    images.append(img)
-    names.append(img_path)
+    if images and names:
+        images.append(img)
+        names.append(img_path)
 
-    file_name = saving(img, img_path, sizes, np_type)
-    histogram_sizes(sizes, file_name, np_type)
+    labeled_filename, sizes_filename = saving(img, img_path, sizes, np_type)
+    hist_filename = histogram_sizes(sizes, labeled_filename, np_type)
 
-    print("saving into:", file_name)
+    print("saving into:", sizes_filename)
+
+    return labeled_filename, hist_filename, sizes_filename
 
 
 def get_config():

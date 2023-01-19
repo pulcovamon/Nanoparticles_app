@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(scale_text, 6, 8, 1, 2)
 
         self.scale_w = QSpinBox()
-        self.scale_w.setValue(20)
+        self.scale_w.setValue(100)
         self.scale_w.setMinimum(10)
         self.scale_w.setMaximum(1000)
         self.scale_w.setSingleStep(10)

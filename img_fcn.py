@@ -381,7 +381,7 @@ def hough_segmentation(img, pixel_size, np_type):
     hough_res = hough_circle(canny_edge, hough_radii)
 
     accums, x, y, r = hough_circle_peaks(
-        hough_res, hough_radii, min_xdistance=int(min_dist), min_ydistance=int(min_dist) # remove int() if variable is not used
+        hough_res, hough_radii, min_xdistance=int(min_dist), min_ydistance=int(min_dist)
     )
     x = np.uint16(np.around(x))
     y = np.uint16(np.around(y))

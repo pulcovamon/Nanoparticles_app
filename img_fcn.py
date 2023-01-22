@@ -1,4 +1,4 @@
-"""Co celý modul dělá ve zkratce"""
+"""Analyze TEM images on gold nanoparticles"""
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
@@ -19,7 +19,7 @@ from skimage.morphology import remove_small_holes, remove_small_objects, disk
 
 
 def load_inputs(img_path):
-    """Function for loading image names, scales
+    """Load image names, scales
         from microscope and types of particles
 
     Args:
@@ -35,7 +35,7 @@ def load_inputs(img_path):
             if file.endswith(".json"):
                 if json_found:
                     raise Exception("multiple input descriptions")
-                json_path = img_path + "/" + file   #path.join
+                json_path = os.path.join(img_path, file)
                 json_found = True
 
     with open(json_path, mode='r') as json_file:
@@ -58,7 +58,7 @@ def load_inputs(img_path):
 
 
 def loading_img(img_path, scale):
-    """Function for loading image from given file and croping it
+    """Load image from given file and croping it
 
     Args:
         img_path (str): path to image file
@@ -80,7 +80,6 @@ def loading_img(img_path, scale):
     line = cv2.cvtColor(line, cv2.COLOR_RGB2GRAY)
 
     mask = line < 10
-    # try funciton remove small objects
     mask = remove_small_objects(mask)
     indices = np.where(mask)
     length = max(indices[1]) - min(indices[1])
@@ -92,7 +91,7 @@ def loading_img(img_path, scale):
 
 
 def filtering_img(img_raw, scale, np_type, pixel_size):
-    """Function for bluring image and edge detection
+    """Blur image and edge detection
 
     Args:
         img_raw (numpy.ndarray): RGB image
@@ -135,7 +134,7 @@ def background(img):
 
 
 def binarizing(img, np_type):
-    """Function for finding threshold and binarize image
+    """Find threshold and binarize image
 
     Args:
         img (numpy.ndarray): single-channel image
@@ -156,7 +155,7 @@ def binarizing(img, np_type):
 
 
 def watershed_transform(binary):
-    """Function for labeling of image using calculated
+    """Label image using calculated
     distance map and markers for watershed transform
 
     Args:
@@ -178,7 +177,7 @@ def watershed_transform(binary):
 
 
 def segmentation(img, binary, np_type, pixel_size):
-    """Function for perform segmentation and calculate sizes
+    """Perform segmentation and calculate sizes
 
     Args:
         raw (numpy.ndarray): raw image (three channels)
@@ -206,7 +205,7 @@ def segmentation(img, binary, np_type, pixel_size):
 
 
 def result_image(raw, labels, np_type, props_ht):
-    """Function for crating result image
+    """Create result image
 
     Args:
         raw (numpy.ndarray): 3-channels raw image
@@ -236,7 +235,7 @@ def result_image(raw, labels, np_type, props_ht):
 
 
 def overlay_images(raw, labels):
-    """Function for overlay labeled image over raw image
+    """Overlay labeled image over raw image
 
     Args:
         raw (numpy.ndarray): raw image (three channels)
@@ -331,7 +330,7 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
 
 
 def filter_blobs(labels, sizes, props):
-    """Function for eliminate oversegmented blobs
+    """Eliminate oversegmented blobs
 
     Args:
         labels (numpy.ndarray): labeled image from watershed
@@ -377,11 +376,12 @@ def hough_segmentation(img, pixel_size, np_type):
 
     start = max(10, 5 / pixel_size)
     end = min(100, 50 / pixel_size)
+    min_dist = 10/pixel_size
     hough_radii = np.arange(start, end, 2)
     hough_res = hough_circle(canny_edge, hough_radii)
 
     accums, x, y, r = hough_circle_peaks(
-        hough_res, hough_radii, min_xdistance=int(10), min_ydistance=int(10) # remove int() if variable is not used
+        hough_res, hough_radii, min_xdistance=int(min_dist), min_ydistance=int(min_dist) # remove int() if variable is not used
     )
     x = np.uint16(np.around(x))
     y = np.uint16(np.around(y))
@@ -395,7 +395,7 @@ def hough_segmentation(img, pixel_size, np_type):
 
 
 def filter_circles(gray, circles, area):
-    """Function for deleting too small and too bright
+    """Delete too small and too bright
     and circles not fitting into image
 
     Args:
@@ -456,7 +456,7 @@ def filter_circles(gray, circles, area):
 
 
 def pixels_in_circle(img, cx, cy, r):
-    """Function for finding all pixel values inside circle
+    """Find all pixel values inside circle
 
     Args:
         img (numpy.ndarray): single-channel image
@@ -522,8 +522,7 @@ def ploting_img(images, names):
 
 
 def saving(img, file_name, sizes, np_type, directory="results"):
-    """Function for saving result image into
-                                    given directory.
+    """Save result image into given directory.
 
     Args:
         img (numpy array): labeled image
@@ -536,11 +535,11 @@ def saving(img, file_name, sizes, np_type, directory="results"):
         string: path to file
     """
     name = re.split("/", file_name)
-    res_path = directory + "/" + name[-1]
+    res_path = os.path.join(directory, name[-1])
     plt.imsave(res_path, img)
 
     size_path = re.split("\\.", res_path)
-    size_path = size_path[0] + ".txt"
+    size_path = f'{size_path[0]}.txt'
 
     with open(size_path, "w") as txt_file:
         if np_type == "nanoparticles":
@@ -549,8 +548,9 @@ def saving(img, file_name, sizes, np_type, directory="results"):
             txt_file.write(avg)
 
             for size in sizes:
-                curr_size = str(size) + " nm\n"
+                curr_size = str(size)
                 txt_file.write(curr_size)
+                txt_file.write('\n')
         else:
             avg_area = round(sum(sizes[0]) / len(sizes[0]), 3)
             avg_area = "mean area: " + str(avg_area) + "nm^2\n"
@@ -569,14 +569,14 @@ def saving(img, file_name, sizes, np_type, directory="results"):
 
             for i in range(len(sizes[0])):
                 line = [str(sizes[0][i]), str(sizes[1][i]), str(sizes[2][i])]
-                line = " ".join(line) + "\n"
-                txt_file.write(line) # writrline instead of write
+                txt_file.writelines(line)
+                txt_file.write('\n')
 
     return res_path, size_path
 
 
 def calculation_watershed(labeled, np_type):
-    """Calculation of mean radius and area of NP.
+    """Calculate mean radius and area of NP.
 
     Args:
         labeled (numpy array): labeled image
@@ -611,18 +611,18 @@ def calculation_watershed(labeled, np_type):
 
     labels = props["label"]
     area = props["area_convex"]
-    selected = [(labels[i], area[i]) for i in range(len(labels))] # zip(labels, area, restrictive=True)
+    selected = [(labels[i], area[i]) for i in range(len(labels))]
 
     return sizes, selected
 
 
 def histogram_sizes(sizes, file_name, np_type):
-    """Function for creating histogram of sizes of NP
+    """Create histogram of sizes of NP
 
     Args:
         sizes (list): list of NP sizes
     """
-    file_name = file_name[:-4] + "hist" + file_name[-4:]
+    file_name = f'{file_name[:-4]}hist{file_name[-4:]}'
 
     if np_type == "nanoparticles":
         plt.hist(sizes, bins=10, color="brown", edgecolor="black")
@@ -646,7 +646,7 @@ def histogram_sizes(sizes, file_name, np_type):
 
 
 def read_args():
-    """Function for command line arguments
+    """Command line arguments
 
     Returns:
         dictionary: path to image folder and
@@ -678,6 +678,17 @@ def read_args():
 
 
 def image_analysis(input_description, image, images=None, names=None):
+    """Analyze image of NPs and calculate properties
+
+    Args:
+        input_description (dict): metadata
+        image (path): image file
+        images (list, optional): list of already analyzed images. Defaults to None.
+        names (list, optional): list of already analyzed images names. Defaults to None.
+
+    Returns:
+        path, path, path: path to labeled image, histogram of sizes and txt file with properties
+    """
 
     scale = int(input_description[image][0])
     np_type = input_description[image][1]
@@ -704,6 +715,14 @@ def image_analysis(input_description, image, images=None, names=None):
 
 
 def get_config():
+    """Configuration from command line
+
+    Raises:
+        Exception: wrong method
+
+    Returns:
+        dict, str, bool: metadata, method, plot result or not
+    """
 
     config = read_args()
 

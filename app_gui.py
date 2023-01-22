@@ -101,7 +101,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.add_img, 2, 0, 1, 7,
                             Qt.AlignmentFlag.AlignCenter)
 
-        self.process = QPushButton('Segment image')
+        self.process = QPushButton('Analyze image')
         self.process.clicked.connect(self.processing)
         self.process.setDisabled(True)
         self.process.setFixedSize(400, 40)

@@ -149,7 +149,12 @@ def binarizing(img, np_type):
         thresh = threshold_otsu(img)
 
     binary = img < thresh
+    plt.imshow(binary)
+    plt.show()
     binary = remove_small_holes(binary)
+    binary = remove_small_objects(binary)
+    plt.imshow(binary)
+    plt.show()
 
     return binary
 
@@ -341,11 +346,12 @@ def filter_blobs(labels, sizes, props):
     Returns:
         numpy.ndarray, list: labeled image, list of properties
     """
+
     if type(sizes) is list:
         median = calc_median(deepcopy(sizes[0]))
         mean = sum(sizes[0]) / len(sizes[0])
     else:
-        median = calc_median(deepcopy(sizes)) # remove unneeded deepcopz
+        median = calc_median(deepcopy(sizes))
         mean = sum(sizes) / len(sizes)
 
     avg = max(mean, median)
@@ -444,13 +450,13 @@ def filter_circles(gray, circles, area):
         else:
             smaller = area[i] <= max_area / 1.5
             bigger = area[i] >= max_area * 3
-            if smaller or bigger:
+            '''if smaller or bigger:
                 circles.pop(i)
                 area.pop(i)
                 j = 0
-            else:
-                i += 1
-                j += 1
+            else:'''
+            i += 1
+            j += 1
 
     return circles
 

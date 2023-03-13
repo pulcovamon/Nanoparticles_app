@@ -38,6 +38,9 @@ def load_inputs(img_path):
                 json_path = os.path.join(img_path, file)
                 json_found = True
 
+    if not json_found:
+        raise Exception('json file not found')
+
     with open(json_path, mode='r') as json_file:
         input_description = json.load(json_file)
 
@@ -345,7 +348,7 @@ def filter_blobs(labels, sizes, props):
 
     Returns:
         numpy.ndarray, list: labeled image, list of properties
-    """
+    
 
     if type(sizes) is list:
         median = calc_median(deepcopy(sizes[0]))
@@ -363,7 +366,7 @@ def filter_blobs(labels, sizes, props):
             labels[labels == props[i][0]] = 0
             props.remove((props[i][0], props[i][1]))
         else:
-            i += 1
+            i += 1"""
 
     return labels, props
 
@@ -664,7 +667,7 @@ def read_args():
     )
 
     parser.add_argument(
-        "-p", "--path", type=str, default="data", help="path to images (default: data)"
+        "-p", "--path", type=str, default="data/images", help="path to images (default: data/images)"
     )
     parser.add_argument(
         "-m",
@@ -731,6 +734,7 @@ def get_config():
     """
 
     config = read_args()
+    print(config["path"])
 
     input_description = load_inputs(config["path"])
     method = config["method"]

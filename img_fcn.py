@@ -384,8 +384,8 @@ def hough_segmentation(img, pixel_size, np_type):
     """
     canny_edge = canny(img, sigma=2)
 
-    start = max(10, 5 / pixel_size)
-    end = min(100, 50 / pixel_size)
+    start = 10 / pixel_size
+    end = 100 / pixel_size
     min_dist = 10/pixel_size
     hough_radii = np.arange(start, end, 2)
     hough_res = hough_circle(canny_edge, hough_radii)
@@ -444,9 +444,7 @@ def filter_circles(gray, circles, area):
         list: list with tuples with center
                         indices and radius of circles
     """
-    print('before: ', circles)
     circles = inside_circles(circles)
-    print('after: ', circles)
 
     dims = gray.shape
     thresh = threshold_minimum(gray)

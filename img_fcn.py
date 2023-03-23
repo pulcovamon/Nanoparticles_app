@@ -153,11 +153,11 @@ def binarizing(img, np_type):
 
     binary = img < thresh
     plt.imshow(binary)
-    plt.show()
+    #plt.show()
     binary = remove_small_holes(binary)
     binary = remove_small_objects(binary)
     plt.imshow(binary)
-    plt.show()
+    #plt.show()
 
     return binary
 
@@ -366,7 +366,8 @@ def filter_blobs(labels, sizes, props):
             labels[labels == props[i][0]] = 0
             props.remove((props[i][0], props[i][1]))
         else:
-            i += 1"""
+            i += 1"""   
+
 
     return labels, props
 
@@ -402,6 +403,32 @@ def hough_segmentation(img, pixel_size, np_type):
 
     return circles
 
+def inside_circles(props):
+
+    for x, y, r in props:
+        x1 = x - r
+        x2 = x + r
+        y1 = y - r
+        y2 = y + r
+
+        for x_new, y_new, r_new in props:
+            x1_new = x_new - r_new
+            x2_new = x_new + r_new
+            y1_new = y_new - r_new
+            y2_new = y_new + r_new
+
+            inside_x = (x1 < x1_new and x2 > x2_new)
+            inside_y = (y1 < y1_new and y2 > y2_new)
+
+            if inside_x and inside_y:
+                x_new = 0
+                y_new  = 0
+                r_new = 0
+
+    props = [i for i in props if i[2] != 0]
+
+    return props
+
 
 def filter_circles(gray, circles, area):
     """Delete too small and too bright
@@ -417,6 +444,10 @@ def filter_circles(gray, circles, area):
         list: list with tuples with center
                         indices and radius of circles
     """
+    print('before: ', circles)
+    circles = inside_circles(circles)
+    print('after: ', circles)
+
     dims = gray.shape
     thresh = threshold_minimum(gray)
 

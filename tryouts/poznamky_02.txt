@@ -1,0 +1,11 @@
+np.where() - vrací vektory souřadnic, jeden pro x a druhý pro ylabel
+předtím nastavit threshold ručně na černou
+použít buď největší spojený komponent nebo mofrologický opening
+
+hough transform:
+- nejdřív binarizovat
+
+gui
+- možnost volit podvzorkování
+
+příštá konzultace: 2. 1. 2023

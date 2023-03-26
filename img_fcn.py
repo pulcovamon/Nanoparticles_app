@@ -15,7 +15,7 @@ from skimage.segmentation import watershed
 from skimage.feature import peak_local_max, canny
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
-from skimage.morphology import remove_small_holes, remove_small_objects, disk
+from skimage.morphology import remove_small_holes, remove_small_objects, disk, erosion
 
 
 def load_inputs(img_path):
@@ -86,6 +86,7 @@ def loading_img(img_path, scale):
     mask = remove_small_objects(mask)
     indices = np.where(mask)
     length = max(indices[1]) - min(indices[1])
+    global pixel_size
     pixel_size = scale / length
 
     img_raw = img_raw[0:-100, :]
@@ -162,7 +163,7 @@ def binarizing(img, np_type):
     return binary
 
 
-def watershed_transform(binary):
+def watershed_transform(binary, np_type):
     """Label image using calculated
     distance map and markers for watershed transform
 
@@ -172,14 +173,24 @@ def watershed_transform(binary):
     Returns:
         numpy.ndarray: labeled image
     """
-    distance = ndi.distance_transform_edt(binary)
 
-    coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=20)
-    mask = np.zeros(distance.shape, dtype=bool)
-    mask[tuple(coords.T)] = True
+    distance = ndi.distance_transform_edt(binary)
+    img = -distance
+    
+    if np_type == 'nanoparticles':
+        coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=20)
+        mask = np.zeros(distance.shape, dtype=bool)
+        mask[tuple(coords.T)] = True
+    else:
+        mask =  binary
+        for _ in range(10):
+            mask = remove_small_holes(mask)
+            mask = remove_small_objects(mask)
+        for _ in range(10):
+            mask = erosion(mask)
 
     markers, _ = ndi.label(mask)
-    labels = watershed(-distance, markers, mask=binary)
+    labels = watershed(img, markers, mask=binary)
 
     return labels
 
@@ -197,7 +208,7 @@ def segmentation(img, binary, np_type, pixel_size):
     Returns:
         numpy.ndarray, list: labeled image, ist of sizes
     """
-    labels = watershed_transform(binary)
+    labels = watershed_transform(binary, np_type)
     sizes, props_watershed = calculation_watershed(labels, np_type)
     labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
 
@@ -406,6 +417,7 @@ def hough_segmentation(img, pixel_size, np_type):
 def inside_circles(props):
 
     for x, y, r in props:
+        print(x, y, r*pixel_size)
         x1 = x - r
         x2 = x + r
         y1 = y - r

@@ -25,12 +25,14 @@ class NPImage:
             print(err)
             raise Exception("wrong input: image cannot be open")
         
-        self.find_scale(scale)
+        self.scale = scale
+        self.np_type = np_type
+        self.find_scale()
         self.crop()
         self.prepare()
         self.filter()
         
-    def find_scale(self, scale):
+    def find_scale(self):
         width = self.img.shape[1]
         line = self.img[-100:, int(width / 2) :, :]
         line = cv2.cvtColor(line, cv2.COLOR_RGB2GRAY)
@@ -38,7 +40,7 @@ class NPImage:
         mask = remove_small_objects(mask)
         indices = np.where(mask)
         length = max(indices[1]) - min(indices[1])
-        self.pixel_size = scale / length
+        self.pixel_size = self.scale / length
 
     def prepare(self):
         self.img = self.img[0:-100, :]
@@ -47,4 +49,13 @@ class NPImage:
         self.pixel_size *= 2
 
     def filter(self):
-        
+        if self.scale > 500:
+            kernel = disk(3)
+        elif self.scale > 150:
+            kernel = disk(5)
+        else:
+            kernel = disk(7)
+        self.img = median(self.img, kernel)
+
+    def binarize(self):
+        if self.np_type == 'nanoparticles':

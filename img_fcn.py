@@ -318,7 +318,11 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
         list: list pf tuples with coordinates of center
                 and radii of hough circles
     """
-    labels = label(binary, background=0)
+    erode = erosion(binary)
+    iterations = int(5/pixel_size)
+    for _ in range(iterations):
+        erode = erosion(erode)
+    labels = label(erode, background=0)
     _, props = calculation_watershed(labels, np_type)
 
     median = calc_median(deepcopy(sizes))

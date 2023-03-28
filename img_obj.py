@@ -58,4 +58,29 @@ class NPImage:
         self.img = median(self.img, kernel)
 
     def binarize(self):
+        if self.np_type == "nanoparticles":
+            thresh = threshold_minimum(self.img)
+        else:
+            self.thresh = threshold_otsu(self.img)
+        self.binary = self.img < thresh
+        self.binary = remove_small_holes(self.binary)
+        self.binary = remove_small_objects(self.binary)
+
+    def watershed_transform(self):
+        distance = ndi.distance_transform_edt(self.binary)
+        img = -distance
+        
         if self.np_type == 'nanoparticles':
+            coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=20)
+            mask = np.zeros(distance.shape, dtype=bool)
+            mask[tuple(coords.T)] = True
+        else:
+            mask =  self.binary
+            for _ in range(10):
+                mask = remove_small_holes(mask)
+                mask = remove_small_objects(mask)
+            for _ in range(10):
+                mask = erosion(mask)
+
+        markers, _ = ndi.label(mask)
+        self.labels = watershed(img, markers, mask=self.binary)

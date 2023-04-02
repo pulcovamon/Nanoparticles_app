@@ -28,9 +28,13 @@ class NPImage:
         self.scale = scale
         self.np_type = np_type
         self.find_scale()
-        self.crop()
         self.prepare()
         self.filter()
+        self.binary = None
+        self.props_wsh = []
+        self.sizes = []
+        self.labels = None
+        self.props_ht = None
 
         
     def find_scale(self):
@@ -72,8 +76,9 @@ class NPImage:
 
 
     def segmentation(self):
+        self.binarize()
         self.watershed_transform()
-        self.props_wsh = self.calc_watershed()
+        self.props_wsh = self.calc_watershed(self.labels)
 
         if self.np_type == "nanoparticles":
             self.find_overlaps()
@@ -183,7 +188,6 @@ class NPImage:
     
     def inside_circles(self, props):
         for x, y, r in props:
-            print(x, y, r*self.pixel_size)
             x1 = x - r
             x2 = x + r
             y1 = y - r
@@ -258,17 +262,18 @@ class NPImage:
             cy = int(circles[i][1])
             r = int(circles[i][2])
             pixels = self.pixels_in_circle(roi, cx, cy, r)
-            median_value = self.calc_median(pixels)
-            bellow_zero = cx - r < 0 or cy - r < 0
-            over_size = cx + r > dims[1] or cy + r > dims[0]
-            if median_value > thresh:
-                circles.pop(i)
-                area.pop(i)
-                i += 1
-            elif bellow_zero or over_size:
-                circles.pop(i)
-                area.pop(i)
-                i += 1
+            if pixels:
+                median_value = self.calc_median(pixels)
+                bellow_zero = cx - r < 0 or cy - r < 0
+                over_size = cx + r > dims[1] or cy + r > dims[0]
+                if median_value > thresh:
+                    circles.pop(i)
+                    area.pop(i)
+                    i += 1
+                elif bellow_zero or over_size:
+                    circles.pop(i)
+                    area.pop(i)
+                    i += 1
 
     
     def find_overlaps(self):
@@ -328,3 +333,11 @@ class NPImage:
         sizes = [round(self.pixel_size * i, 3) for i in sizes]
 
         return sizes
+
+
+if __name__ == '__main__':
+    image = NPImage(
+        '/home/monika/Desktop/project/Nanoparticles_app/data/images/AuNP_20nm_001.jpg',
+        100, 'nanoparticles')
+    
+    image.segmentation()

@@ -77,6 +77,7 @@ class NPImage:
 
     def segmentation(self):
         self.binarize()
+        print(self.binary.shape)
         self.watershed_transform()
         self.props_wsh = self.calc_watershed(self.labels)
 
@@ -337,7 +338,7 @@ class NPImage:
 
 if __name__ == '__main__':
     image = NPImage(
-        '/home/monika/Desktop/project/Nanoparticles_app/data/images/AuNP_20nm_001.jpg',
+        'data/images/AuNP_20nm_001.jpg',
         100, 'nanoparticles')
     
     image.segmentation()

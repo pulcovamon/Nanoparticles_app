@@ -16,6 +16,7 @@ from skimage.feature import peak_local_max, canny
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
 from skimage.morphology import remove_small_holes, remove_small_objects, disk, erosion
+from sklearn.cluster import KMeans
 
 
 def load_inputs(img_path):
@@ -94,7 +95,7 @@ def loading_img(img_path, scale):
     return img_raw, pixel_size
 
 
-def filtering_img(img_raw, scale, np_type, pixel_size):
+def filtering_img(img_raw, scale, np_type, pixel_size, is_bg):
     """Blur image and edge detection
 
     Args:
@@ -116,6 +117,8 @@ def filtering_img(img_raw, scale, np_type, pixel_size):
         else:
             kernel = disk(3)
         img = median(img, kernel)
+        if is_bg:
+            img = background(img)
 
     img = rescale(img, 0.5)
     pixel_size *= 2
@@ -134,10 +137,58 @@ def filtering_img(img_raw, scale, np_type, pixel_size):
 
 
 def background(img):
-    ...
+    
+    """Remove background from image
+
+    Args:
+        img (numpy.ndarray): single-channel image
+
+    Returns:
+        numpy.ndarray: image without background
+    """
+    img = img - np.min(img)
+    img = img / np.max(img)
+    img = img * 255
+    img = img.astype(np.uint8)
+    lol = img.astype(np.uint8)
+
+    for i in range(5):
+        bg = cv2.GaussianBlur(img, (35, 35), 0)
+        my_try = cv2.subtract(img, bg)
+        grad_x = cv2.Sobel(img, cv2.CV_16S, 1, 0)
+        grad_y = cv2.Sobel(img, cv2.CV_16S, 0, 1)
+        grad = cv2.addWeighted(grad_x, 0.5, grad_y, 0.5, 0)
+        grad = cv2.convertScaleAbs(grad)
+        grad = grad.astype(np.uint8)
+        #img = img.astype(np.uint8)
+        #img = cv2.subtract(img, grad)
+        img = cv2.subtract(img, my_try)
+        img = median(img, disk(9))
+        img = cv2.addWeighted(img, 1.5, grad, -0.5, 0)
+        img = ndi.morphology.grey_dilation(img, size=(7, 7))
+        img = ndi.morphology.grey_erosion(img, size=(3, 3))
+        img = ndi.morphology.grey_dilation(img, size=(3, 3))
+        if i == 0:
+            img = 255 - img
+            img = cv2.subtract(lol, img)
+
+    return img
 
 
-def binarizing(img, np_type):
+def light_particles(img, np_type):
+    """Find light spots in particles
+    
+    Args:
+        img (numpy.ndarray): single-channel image
+        np_type (string): nanoparticles or nanorods"""
+    maximum = np.max(img)
+    if maximum == 1.0:
+        img[img == 1.0] = 0
+        plt.imshow(img)
+        plt.show()
+
+
+def binarizing(img, np_type, is_bg):
     """Find threshold and binarize image
 
     Args:
@@ -147,20 +198,37 @@ def binarizing(img, np_type):
     Returns:
         numpy array: binary image
     """
-    if np_type == "nanoparticles":
-        thresh = threshold_minimum(img)
+    #light_particles(img, np_type)
+    if is_bg:
+        thresh = 1
     else:
-        thresh = threshold_otsu(img)
+        if np_type == "nanoparticles":
+            thresh = threshold_minimum(img)
+        else:
+            thresh = threshold_otsu(img)
 
     binary = img < thresh
-    plt.imshow(binary)
-    #plt.show()
     binary = remove_small_holes(binary)
     binary = remove_small_objects(binary)
-    plt.imshow(binary)
-    #plt.show()
+
+    if is_bg:
+        for _ in range(3):
+            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_OPEN, disk(9))
+            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_CLOSE, disk(9))
 
     return binary
+
+
+def detect_ellipses(binary):
+    cnts = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    i = 0
+    for contour in cnts:
+        if i == 0:
+            i = 1
+            continue
+        cv2.drawContours(binary.astype(np.uint8), [contour], 0, (0, 0, 255), 5)
+        plt.imshow(binary)
+        plt.show()
 
 
 def watershed_transform(binary, np_type):
@@ -213,7 +281,7 @@ def segmentation(img, binary, np_type, pixel_size):
     labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
 
     if np_type == "nanoparticles":
-        props_ht = find_overlaps(img, binary, sizes, np_type, pixel_size)
+        props_ht, seeds = find_overlaps(img, binary, sizes, np_type, pixel_size)
         sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
     else:
         sizes[0] = [i * pixel_size for i in sizes[1]]
@@ -303,6 +371,19 @@ def find_duplicity(labels, props_ht, props_wsh, pixel_size):
     return sizes
 
 
+def detect_seeds(sizes):
+    sizes = np.array(sizes).reshape(-1, 1)
+    kmeans = KMeans(n_clusters=2).fit(sizes)
+    centers = kmeans.cluster_centers_
+    if centers[0] > 4*centers[1] or centers[1] > 4*centers[0]:
+        seeds = True
+    else:
+        seeds = False
+
+    return seeds, centers
+        
+
+
 def find_overlaps(img, binary, sizes, np_type, pixel_size):
     """Find overlapping particles and perform
         circle hough transform on found area
@@ -319,37 +400,48 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
                 and radii of hough circles
     """
     erode = erosion(binary)
-    iterations = int(5/pixel_size)
+    iterations = int(9/pixel_size)
     for _ in range(iterations):
         erode = erosion(erode)
     labels = label(erode, background=0)
     _, props = calculation_watershed(labels, np_type)
+    seeds, centers = detect_seeds(deepcopy(sizes))
 
-    median = calc_median(deepcopy(sizes))
-    props_ht = []
+    if seeds:
+        props_ht = []
 
-    for number, size in props:
-        if size > 1.5 * median:
-            indices = np.argwhere(labels == number)
-            x_min = max(np.min(indices[:, 0]) - 10, 0)
-            y_min = max(np.min(indices[:, 1]) - 10, 0)
-            w = labels.shape[0]
-            h = labels.shape[1]
-            x_max = min(np.max(indices[:, 0]) + 10, w - 1)
-            y_max = min(np.max(indices[:, 1]) + 10, h - 1)
-            roi = img[x_min:x_max, y_min:y_max]
+    else:
+        median = calc_median(deepcopy(sizes))
+        for i in range(len(sizes)):
+            if sizes[i] < 0.5 * median:
+                sizes.pop(i)
+                props.pop(i)
+        median = calc_median(deepcopy(sizes))
+        props_ht = []
 
-            circles = hough_segmentation(roi, pixel_size, np_type)
-            area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
-            circles = filter_circles(roi, circles, area)
+        for number, size in props:
+            if size > median:
+                indices = np.argwhere(labels == number)
+                x_min = max(np.min(indices[:, 0]) - 10, 0)
+                y_min = max(np.min(indices[:, 1]) - 10, 0)
+                w = labels.shape[0]
+                h = labels.shape[1]
+                x_max = min(np.max(indices[:, 0]) + 10, w - 1)
+                y_max = min(np.max(indices[:, 1]) + 10, h - 1)
+                roi = img[x_min:x_max, y_min:y_max]
 
-            for circle in circles:
-                cx = circle[0] + y_min
-                cy = circle[1] + x_min
-                r = circle[2]
-                props_ht.append((cx, cy, r))
+                circles = hough_segmentation(roi, pixel_size, np_type)
+                if len(circles) > 1:
+                    area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
+                    circles = filter_circles(roi, circles, area, median)
 
-    return props_ht
+                    for circle in circles:
+                        cx = circle[0] + y_min
+                        cy = circle[1] + x_min
+                        r = circle[2]
+                        props_ht.append((cx, cy, r))
+
+    return props_ht, seeds
 
 
 def filter_blobs(labels, sizes, props):
@@ -362,7 +454,7 @@ def filter_blobs(labels, sizes, props):
                         and particular size from watershed
 
     Returns:
-        numpy.ndarray, list: labeled image, list of properties
+        numpy.ndarray, list: labeled image, list of properties"""
     
 
     if type(sizes) is list:
@@ -381,7 +473,7 @@ def filter_blobs(labels, sizes, props):
             labels[labels == props[i][0]] = 0
             props.remove((props[i][0], props[i][1]))
         else:
-            i += 1"""   
+            i += 1   
 
 
     return labels, props
@@ -446,7 +538,7 @@ def inside_circles(props):
     return props
 
 
-def filter_circles(gray, circles, area):
+def filter_circles(gray, circles, area, median):
     """Delete too small and too bright
     and circles not fitting into image
 
@@ -478,10 +570,6 @@ def filter_circles(gray, circles, area):
         cy = int(circles[i][1])
         r = int(circles[i][2])
 
-        median_area = calc_median(deepcopy(area))
-        mean_area = np.mean(area)
-        max_area = max(median_area, mean_area)
-
         if first_cycle:
             pixels = pixels_in_circle(gray, cx, cy, r)
             median_value = calc_median(copy(pixels))
@@ -496,15 +584,15 @@ def filter_circles(gray, circles, area):
             else:
                 i += 1
         else:
-            smaller = area[i] <= max_area / 1.5
-            bigger = area[i] >= max_area * 3
-            '''if smaller or bigger:
+            smaller = area[i] <= median / 1.5
+            bigger = area[i] >= median * 2
+            if smaller or bigger:
                 circles.pop(i)
                 area.pop(i)
                 j = 0
-            else:'''
-            i += 1
-            j += 1
+            else:
+                i += 1
+                j += 1
 
     return circles
 
@@ -682,7 +770,7 @@ def histogram_sizes(sizes, file_name, np_type):
         plt.hist(sizes, bins=10, color="brown", edgecolor="black")
         plt.title("Histogram of sizes of NPs")
         plt.xlabel("diameter [nm]")
-        plt.ylabel("frequency")
+        plt.ylabel("frequency [-]")
         plt.savefig(file_name)
         plt.clf()
 
@@ -692,7 +780,7 @@ def histogram_sizes(sizes, file_name, np_type):
         plt.legend(["major axis", "minor axis"])
         plt.title("Histogram of sizes of NRs")
         plt.xlabel("axis length [nm]")
-        plt.ylabel("frequency")
+        plt.ylabel("frequency [-]")
         plt.savefig(file_name)
         plt.clf()
 
@@ -747,10 +835,14 @@ def image_analysis(input_description, image, images=None, names=None):
     scale = int(input_description[image][0])
     np_type = input_description[image][1]
     img_path = input_description[image][2]
+    if np_type == "nanorods":
+        background = True
+    else:
+        background = False
 
     img_raw, pixel_size = loading_img(img_path, scale)
-    img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size)
-    binary = binarizing(img_filtered, np_type)
+    img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size, background)
+    binary = binarizing(img_filtered, np_type, background)
     labels, sizes, props_ht = segmentation(
         img_filtered, binary, np_type, pixel_size
     )

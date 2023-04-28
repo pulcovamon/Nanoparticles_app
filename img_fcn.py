@@ -9,7 +9,7 @@ import re
 import argparse
 from copy import deepcopy, copy
 from skimage.io import imread
-from skimage.filters import threshold_otsu, threshold_minimum, median
+from skimage.filters import threshold_otsu, threshold_minimum, median, rank
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max, canny
@@ -146,31 +146,11 @@ def background(img):
     Returns:
         numpy.ndarray: image without background
     """
-    img = img - np.min(img)
-    img = img / np.max(img)
-    img = img * 255
-    img = img.astype(np.uint8)
-    lol = img.astype(np.uint8)
-
-    for i in range(5):
-        bg = cv2.GaussianBlur(img, (35, 35), 0)
-        my_try = cv2.subtract(img, bg)
-        grad_x = cv2.Sobel(img, cv2.CV_16S, 1, 0)
-        grad_y = cv2.Sobel(img, cv2.CV_16S, 0, 1)
-        grad = cv2.addWeighted(grad_x, 0.5, grad_y, 0.5, 0)
-        grad = cv2.convertScaleAbs(grad)
-        grad = grad.astype(np.uint8)
-        #img = img.astype(np.uint8)
-        #img = cv2.subtract(img, grad)
-        img = cv2.subtract(img, my_try)
-        img = median(img, disk(9))
-        img = cv2.addWeighted(img, 1.5, grad, -0.5, 0)
-        img = ndi.morphology.grey_dilation(img, size=(7, 7))
-        img = ndi.morphology.grey_erosion(img, size=(3, 3))
-        img = ndi.morphology.grey_dilation(img, size=(3, 3))
-        if i == 0:
-            img = 255 - img
-            img = cv2.subtract(lol, img)
+    
+    entropy = rank.entropy(img, disk(25))
+    background = entropy < threshold_otsu(entropy)
+    plt.imshow(background, cmap='gray')
+    plt.show()
 
     return img
 

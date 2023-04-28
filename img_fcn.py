@@ -146,12 +146,16 @@ def background(img):
     Returns:
         numpy.ndarray: image without background
     """
-    
-    entropy = rank.entropy(img, disk(25))
-    background = entropy < threshold_otsu(entropy)
-    plt.imshow(background, cmap='gray')
-    plt.show()
 
+    img = img.astype(np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
+    k = 3
+    _, label, center = cv2.kmeans(img, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+    print(set(label.flatten()))
+    center = np.uint8(center)
+    res = center[label.flatten()]
+    res = res.reshape(img.shape)
+    
     return img
 
 

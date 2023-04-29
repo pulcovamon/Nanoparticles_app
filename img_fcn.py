@@ -9,7 +9,7 @@ import re
 import argparse
 from copy import deepcopy, copy
 from skimage.io import imread
-from skimage.filters import threshold_otsu, threshold_minimum, median, rank
+from skimage.filters import threshold_otsu, threshold_minimum, median, rank, _gaussian
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed
 from skimage.feature import peak_local_max, canny
@@ -133,6 +133,9 @@ def filtering_img(img_raw, scale, np_type, pixel_size, is_bg):
 
         img = median(img, kernel)
 
+    plt.imshow(img, cmap='gray')
+    plt.show()
+
     return img, pixel_size
 
 
@@ -148,6 +151,11 @@ def background(img):
     """
 
     img = img.astype(np.float32)
+    bg = cv2.GaussianBlur(img, (49,49), 0)
+    plt.imshow(bg, cmap='gray')
+    plt.show()
+    plt.imshow(img, cmap='gray')
+    plt.show()
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
     k = 3
     _, label, center = cv2.kmeans(img, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
@@ -183,13 +191,10 @@ def binarizing(img, np_type, is_bg):
         numpy array: binary image
     """
     #light_particles(img, np_type)
-    if is_bg:
-        thresh = 1
+    if np_type == "nanoparticles":
+        thresh = threshold_minimum(img)
     else:
-        if np_type == "nanoparticles":
-            thresh = threshold_minimum(img)
-        else:
-            thresh = threshold_otsu(img)
+        thresh = threshold_otsu(img)
 
     binary = img < thresh
     binary = remove_small_holes(binary)
@@ -199,6 +204,9 @@ def binarizing(img, np_type, is_bg):
         for _ in range(3):
             binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_OPEN, disk(9))
             binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_CLOSE, disk(9))
+
+    plt.imshow(binary, cmap='gray')
+    plt.show()
 
     return binary
 

@@ -1,4 +1,4 @@
-# Nanoparticles_app
+# Nanoparticles app
 Desktop application for detection size and shape of gold nanoparticles and nanorods from TEM image (Bachelor's project) <br>
 It is still in process, so results may look badly, functions may look strange etc. <br>
 <pre>

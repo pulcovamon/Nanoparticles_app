@@ -10,4 +10,4 @@ styles.css   : styles for GUI <br>
 /data/images : data used in the project and .json file (description of images) <br>
 /results     : segmented images, histograms and .txt files with calculated sizes <br>
 /notebooks   : I use it for trying new things <br>
-<pre>
+</pre>

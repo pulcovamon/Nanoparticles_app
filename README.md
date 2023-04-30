@@ -1,10 +1,10 @@
 # Nanoparticles_app
 Desktop application for detection size and shape of gold nanoparticles and nanorods from TEM image (Bachelor's project) <br>
 It is still in process, so results may look badly, functions may look strange etc. <br>
-img_fcn.py  : main project file <br>
-app_gui.py  : file with GUI, which uses img:fcn.py file for image analysis <br>
-styles.css  : styles for GUI <br>
-icons       : images used in GUI <br>
-data/images : data used in the project and .json file (description of images) <br>
-results     : segmented images, histograms and .txt files with calculated sizes <br>
-notebooks   : I use it for trying new things <br>
+img_fcn.py__: main project file <br>
+app_gui.py__: file with GUI, which uses img:fcn.py file for image analysis <br>
+styles.css__: styles for GUI <br>
+icons_______: images used in GUI <br>
+data/images_: data used in the project and .json file (description of images) <br>
+results_____: segmented images, histograms and .txt files with calculated sizes <br>
+notebooks___: I use it for trying new things <br>

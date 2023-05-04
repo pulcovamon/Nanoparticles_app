@@ -12,6 +12,7 @@ styles.css   : styles for GUI <br>
 /notebooks   : I use it for trying new things <br>
 </pre>
 
-<img src="/algorithm.png"
+<img src="/algorithm_principle.png"
+alt="principle"
 title="Algorithm principle"
 style="display: inline-block; margin: 0 auto; max-width: 300px">

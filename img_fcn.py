@@ -133,9 +133,6 @@ def filtering_img(img_raw, scale, np_type, pixel_size, is_bg):
 
         img = median(img, kernel)
 
-    plt.imshow(img, cmap='gray')
-    plt.show()
-
     return img, pixel_size
 
 
@@ -150,19 +147,7 @@ def background(img):
         numpy.ndarray: image without background
     """
 
-    img = img.astype(np.float32)
-    bg = cv2.GaussianBlur(img, (49,49), 0)
-    plt.imshow(bg, cmap='gray')
-    plt.show()
-    plt.imshow(img, cmap='gray')
-    plt.show()
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-    k = 3
-    _, label, center = cv2.kmeans(img, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-    print(set(label.flatten()))
-    center = np.uint8(center)
-    res = center[label.flatten()]
-    res = res.reshape(img.shape)
+    #img = cv2.GaussianBlur(img, (21,21), 0)
     
     return img
 
@@ -202,12 +187,23 @@ def binarizing(img, np_type, is_bg):
 
     if is_bg:
         for _ in range(3):
-            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_OPEN, disk(9))
-            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_CLOSE, disk(9))
+            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_OPEN, disk(5))
+            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_CLOSE, disk(5))
 
+    img *= 255
+    edges = cv2.Canny(img.astype(np.uint8), 50, 200)
+    
+    plt.subplot(2, 2, 1)
+    plt.imshow(binary, cmap='gray')
+    plt.subplot(2, 2, 2)
+    plt.imshow(edges, cmap='gray')
+
+    binary[edges == 255] = 0
+    plt.subplot(2, 2, 3)
     plt.imshow(binary, cmap='gray')
     plt.show()
 
+    print(binary)
     return binary
 
 
@@ -271,6 +267,7 @@ def segmentation(img, binary, np_type, pixel_size):
     labels = watershed_transform(binary, np_type)
     sizes, props_watershed = calculation_watershed(labels, np_type)
     labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
+    sizes = [i for i in sizes]
 
     if np_type == "nanoparticles":
         props_ht, seeds = find_overlaps(img, binary, sizes, np_type, pixel_size)
@@ -391,6 +388,7 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
         list: list pf tuples with coordinates of center
                 and radii of hough circles
     """
+
     erode = erosion(binary)
     iterations = int(9/pixel_size)
     for _ in range(iterations):
@@ -403,12 +401,15 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
         props_ht = []
 
     else:
-        median = calc_median(deepcopy(sizes))
-        for i in range(len(sizes)):
+        median = calc_median(sizes)
+        i = 0
+        while i < len(sizes):
             if sizes[i] < 0.5 * median:
                 sizes.pop(i)
                 props.pop(i)
-        median = calc_median(deepcopy(sizes))
+            else: 
+                i += 1
+        median = calc_median(sizes)
         props_ht = []
 
         for number, size in props:

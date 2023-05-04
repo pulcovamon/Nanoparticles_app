@@ -1,7 +1,7 @@
 # Nanoparticles app
 Desktop application for detection size and shape of gold nanoparticles and nanorods from TEM image (Bachelor's project) <br>
 It is still in process, so results may look badly, functions may look strange etc. <br>
-Example of how algorithm works can be seen in Wiki. <br>
+Example of how algorithm works can be seen in <a href=https://github.com/pulcovamon/Nanoparticles_app/wiki>Wiki</a>. <br>
 <pre>
 img_fcn.py   : main project file <br>
 app_gui.py   : file with GUI, which uses img:fcn.py file for image analysis <br>

@@ -147,7 +147,15 @@ def background(img):
         numpy.ndarray: image without background
     """
 
-    #img = cv2.GaussianBlur(img, (21,21), 0)
+    img *= 255
+    img = cv2.edgePreservingFilter(img.astype(np.uint8),
+                                   flags=1,
+                                   sigma_s=60,
+                                   sigma_r=0.4)
+    img = cv2.medianBlur(img.astype(np.uint8), 9)
+
+    plt.imshow(img, cmap='gray')
+    plt.show()
     
     return img
 
@@ -187,12 +195,15 @@ def binarizing(img, np_type, is_bg):
 
     if is_bg:
         for _ in range(3):
-            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_OPEN, disk(5))
-            binary = cv2.morphologyEx(binary.astype(np.uint8), cv2.MORPH_CLOSE, disk(5))
+            binary = cv2.morphologyEx(binary.astype(np.uint8),
+                                    cv2.MORPH_OPEN, disk(5))
+            binary = cv2.morphologyEx(binary.astype(np.uint8),
+                                      cv2.MORPH_CLOSE, disk(5))
 
     img *= 255
-    edges = cv2.Canny(img.astype(np.uint8), 50, 200)
-    
+    edges = cv2.Canny(img.astype(np.uint8), 20, 200)
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, disk(5))
+    '''
     plt.subplot(2, 2, 1)
     plt.imshow(binary, cmap='gray')
     plt.subplot(2, 2, 2)
@@ -203,7 +214,7 @@ def binarizing(img, np_type, is_bg):
     plt.imshow(binary, cmap='gray')
     plt.show()
 
-    print(binary)
+    print(binary)'''
     return binary
 
 

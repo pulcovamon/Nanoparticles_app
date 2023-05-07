@@ -17,6 +17,7 @@ from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
 from skimage.morphology import remove_small_holes, remove_small_objects, disk, erosion
 from sklearn.cluster import KMeans
+import random
 
 
 def load_inputs(img_path):
@@ -151,7 +152,7 @@ def background(img):
     img = cv2.edgePreservingFilter(img.astype(np.uint8),
                                    flags=1,
                                    sigma_s=60,
-                                   sigma_r=0.4)
+                                   sigma_r=0.1)
     img = cv2.medianBlur(img.astype(np.uint8), 9)
 
     plt.imshow(img, cmap='gray')
@@ -183,7 +184,7 @@ def binarizing(img, np_type, is_bg):
     Returns:
         numpy array: binary image
     """
-    #light_particles(img, np_type)
+
     if np_type == "nanoparticles":
         thresh = threshold_minimum(img)
     else:
@@ -193,28 +194,32 @@ def binarizing(img, np_type, is_bg):
     binary = remove_small_holes(binary)
     binary = remove_small_objects(binary)
 
-    if is_bg:
+    '''if is_bg:
         for _ in range(3):
             binary = cv2.morphologyEx(binary.astype(np.uint8),
                                     cv2.MORPH_OPEN, disk(5))
             binary = cv2.morphologyEx(binary.astype(np.uint8),
-                                      cv2.MORPH_CLOSE, disk(5))
+                                      cv2.MORPH_CLOSE, disk(5))'''
 
     img *= 255
     edges = cv2.Canny(img.astype(np.uint8), 20, 200)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, disk(5))
-    '''
+
     plt.subplot(2, 2, 1)
     plt.imshow(binary, cmap='gray')
     plt.subplot(2, 2, 2)
     plt.imshow(edges, cmap='gray')
 
     binary[edges == 255] = 0
+    binary = cv2.morphologyEx(binary.astype(np.uint8),
+                                    cv2.MORPH_ERODE, disk(5))
+    binary = cv2.morphologyEx(binary.astype(np.uint8),
+                                    cv2.MORPH_DILATE, disk(5))
     plt.subplot(2, 2, 3)
     plt.imshow(binary, cmap='gray')
-    plt.show()
 
-    print(binary)'''
+    if np_type == "nanorods":
+        plt.show()
+        
     return binary
 
 
@@ -305,10 +310,17 @@ def result_image(raw, labels, np_type, props_ht):
         numpy.ndarray: 3-channels result image
     """
     max_val = np.max(labels)
-    multiplicator = int(255 / max_val)
-    labels = np.uint8(labels * multiplicator)
-    color_map = plt.get_cmap("nipy_spectral")
-    labels = color_map(labels)
+    mix = [i for i in range(1, max_val + 1)]
+    random.shuffle(mix)
+    labels_new = labels.copy()
+
+    for i in range(1, max_val + 1):
+        labels_new[labels == i] = mix[i - 1]
+
+    labels = np.ma.masked_where(labels_new == 0, labels_new)
+    c_map = plt.get_cmap('hsv', max_val).copy()
+    c_map.set_bad(color='black', alpha=None)
+    labels = c_map(labels)
     img = overlay_images(raw, labels)
 
     if np_type == "nanoparticles":
@@ -339,7 +351,7 @@ def overlay_images(raw, labels):
     rgb[:, :, 0] = r
     rgb[:, :, 1] = g
     rgb[:, :, 2] = b
-    img = (7 * raw + 3 * rgb) / 10
+    img = (raw + rgb) / 2
     img = np.uint8(img * 255)
 
     return img

@@ -235,11 +235,6 @@ def watershed_transform(binary, np_type, pixel_size):
 
         distance = ndi.distance_transform_edt(binary)
         img = -distance
-    
-
-        '''coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=int(10/pixel_size))
-        mask = np.zeros(distance.shape, dtype=bool)
-        mask[tuple(coords.T)] = True'''
 
     else:
         distance = ndi.distance_transform_edt(binary)
@@ -253,15 +248,7 @@ def watershed_transform(binary, np_type, pixel_size):
             seeds = mask
 
     markers, _ = ndi.label(seeds)
-    #markers2, _ = ndi.label(mask)
     labels = watershed(img, markers, mask=binary)
-    #labels2 = watershed(img, markers2, mask=binary)
-
-    '''plt.subplot(1, 2, 1)
-    plt.imshow(labels, cmap='tab20')
-    plt.subplot(1, 2, 2)
-    plt.imshow(labels2, cmap='tab20')
-    plt.show()'''
 
     return labels
 
@@ -281,14 +268,13 @@ def segmentation(img, binary, np_type, pixel_size):
     """
     labels = watershed_transform(binary, np_type, pixel_size)
     sizes, props_watershed = calculation_watershed(labels, np_type)
-    #labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
     sizes = [i for i in sizes]
 
     if np_type == "nanoparticles":
-        props_ht, seeds = find_overlaps(img, binary, sizes, np_type, pixel_size)
-        props_ht = []
-        #sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
+        props_ht = find_overlaps(img, labels, sizes, np_type, pixel_size)
+        sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
     else:
+        labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
         sizes[0] = [i * pixel_size for i in sizes[1]]
         sizes[1] = [i * pixel_size for i in sizes[2]]
         props_ht = []
@@ -328,7 +314,7 @@ def result_image(raw, labels, np_type, props_ht):
             x *= 2
             y *= 2
             r *= 2
-            cv2.circle(img, (x, y), r, (0, 0, 255), 2)
+            cv2.circle(img, (x, y), r, (0, 0, 0), 2)
 
     return img
 
@@ -396,7 +382,7 @@ def detect_seeds(sizes):
         
 
 
-def find_overlaps(img, binary, sizes, np_type, pixel_size):
+def find_overlaps(img, labels, sizes,  np_type, pixel_size):
     """Find overlapping particles and perform
         circle hough transform on found area
 
@@ -411,53 +397,41 @@ def find_overlaps(img, binary, sizes, np_type, pixel_size):
         list: list pf tuples with coordinates of center
                 and radii of hough circles
     """
+    props_ht = []
+    median = calc_median(sizes)
 
-    erode = erosion(binary)
-    iterations = int(9/pixel_size)
-    for _ in range(iterations):
-        erode = erosion(erode)
-    labels = label(erode, background=0)
-    _, props = calculation_watershed(labels, np_type)
-    seeds, centers = detect_seeds(deepcopy(sizes))
+    for i in range(1, np.max(labels) + 1):
+        roi = labels == i
+        convex_hull = convex_hull_image(roi)
+        diff = convex_hull != roi
+        diff = np.sum(diff.astype(np.float32))
+        area = roi.astype(np.float32).sum()
+        if diff > area / 20:
+            indices = np.argwhere(labels == i)
+            x_min = max(np.min(indices[:, 0]) - 10, 0)
+            y_min = max(np.min(indices[:, 1]) - 10, 0)
+            w = labels.shape[0]
+            h = labels.shape[1]
+            x_max = min(np.max(indices[:, 0]) + 10, w - 1)
+            y_max = min(np.max(indices[:, 1]) + 10, h - 1)
+            roi = labels[x_min:x_max, y_min:y_max]
+            roi = roi == i
 
-    if seeds:
-        props_ht = []
+            circles = hough_segmentation(roi, pixel_size, np_type)
+            if len(circles) > 1:
+                area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
+                circles = filter_circles(roi, circles, area, median)
+            if len(circles) > 1:
+                circles = circles_inside_circles(circles)
 
-    else:
-        median = calc_median(sizes)
-        i = 0
-        while i < len(sizes):
-            if sizes[i] < 0.5 * median:
-                sizes.pop(i)
-                props.pop(i)
-            else: 
-                i += 1
-        median = calc_median(sizes)
-        props_ht = []
+            for circle in circles:
+                cx = circle[0] + y_min
+                cy = circle[1] + x_min
+                r = circle[2]
+                props_ht.append((cx, cy, r))
+                props_ht = small_circles(props_ht)
 
-        for number, size in props:
-            if size > median:
-                indices = np.argwhere(labels == number)
-                x_min = max(np.min(indices[:, 0]) - 10, 0)
-                y_min = max(np.min(indices[:, 1]) - 10, 0)
-                w = labels.shape[0]
-                h = labels.shape[1]
-                x_max = min(np.max(indices[:, 0]) + 10, w - 1)
-                y_max = min(np.max(indices[:, 1]) + 10, h - 1)
-                roi = img[x_min:x_max, y_min:y_max]
-
-                circles = hough_segmentation(roi, pixel_size, np_type)
-                if len(circles) > 1:
-                    area = [(r * pixel_size) ** 2 * np.pi for x, y, r in circles]
-                    circles = filter_circles(roi, circles, area, median)
-
-                    for circle in circles:
-                        cx = circle[0] + y_min
-                        cy = circle[1] + x_min
-                        r = circle[2]
-                        props_ht.append((cx, cy, r))
-
-    return props_ht, seeds
+    return props_ht
 
 
 def filter_blobs(labels, sizes, props):
@@ -505,12 +479,12 @@ def hough_segmentation(img, pixel_size, np_type):
         numpy.ndarray, list: RGB image with plotted
                 circles/elipses, list of NP parameters
     """
-    canny_edge = canny(img, sigma=2)
+    canny_edge = canny(img, sigma=4)
 
     start = 10 / pixel_size
     end = 100 / pixel_size
     min_dist = 10/pixel_size
-    hough_radii = np.arange(start, end, 2)
+    hough_radii = np.arange(start, end, 1)
     hough_res = hough_circle(canny_edge, hough_radii)
 
     accums, x, y, r = hough_circle_peaks(
@@ -522,39 +496,56 @@ def hough_segmentation(img, pixel_size, np_type):
 
     a = accums
     l = len(x)
-    circles = [(x[i], y[i], r[i]) for i in range(l) if a[i] > 0.25]
+    circles = [(x[i], y[i], r[i]) for i in range(l) if a[i] > 0.2]
 
     return circles
 
-def inside_circles(props):
 
-    for x, y, r in props:
-        print(x, y, r*pixel_size)
-        x1 = x - r
-        x2 = x + r
-        y1 = y - r
-        y2 = y + r
+def small_circles(props):
+    """Delete small circles
 
-        for x_new, y_new, r_new in props:
-            x1_new = x_new - r_new
-            x2_new = x_new + r_new
-            y1_new = y_new - r_new
-            y2_new = y_new + r_new
+    Args:
+        props (list): list of tuples with center
+                        indices and radius of circles
 
-            inside_x = (x1 < x1_new and x2 > x2_new)
-            inside_y = (y1 < y1_new and y2 > y2_new)
-
-            if inside_x and inside_y:
-                x_new = 0
-                y_new  = 0
-                r_new = 0
-
-    props = [i for i in props if i[2] != 0]
+    Returns:
+        list: list of tuples with center
+                        indices and radius of circles
+    """
+    radii = [i[2] for i in props]
+    maximum = max(radii)
+    props = [i for i in props if i[2] > maximum / 2]
 
     return props
 
 
-def filter_circles(gray, circles, area, median):
+def circles_inside_circles(props):
+
+    for i in range(len(props)):
+        if props[i] != 0:
+            x1 = props[i][0] - props[i][2]
+            x2 = props[i][0] + props[i][2]
+            y1 = props[i][1] - props[i][2]
+            y2 = props[i][1] + props[i][2]
+
+        for j in range(len(props)):
+            if props[j] != 0 and i != j:
+                x_new = props[j][0]
+                y_new = props[j][1]
+                r_new = props[j][2]
+
+                inside_x = (x1 < x_new - r_new / 2 and x2 > x_new + r_new / 2)
+                inside_y = (y1 < y_new -r_new / 2 and y2 > y_new + r_new / 2)
+
+                if inside_x and inside_y:
+                    props[j] = 0
+
+    props = [i for i in props if i != 0]
+
+    return props
+
+
+def filter_circles(roi, circles, area, median):
     """Delete too small and too bright
     and circles not fitting into image
 
@@ -568,47 +559,25 @@ def filter_circles(gray, circles, area, median):
         list: list with tuples with center
                         indices and radius of circles
     """
-    circles = inside_circles(circles)
-
-    dims = gray.shape
-    thresh = threshold_minimum(gray)
+    dims = roi.shape
 
     i = 0
-    j = 0
-    first_cycle = True
-
-    while j < len(circles):
-        if i == len(circles):
-            i = 0
-            first_cycle = False
-
+    while i < len(circles):
         cx = int(circles[i][0])
         cy = int(circles[i][1])
         r = int(circles[i][2])
 
-        if first_cycle:
-            pixels = pixels_in_circle(gray, cx, cy, r)
-            median_value = calc_median(copy(pixels))
-            bellow_zero = cx - r < 0 or cy - r < 0
-            over_size = cx + r > dims[1] or cy + r > dims[0]
-            if median_value > thresh:
-                circles.pop(i)
-                area.pop(i)
-            elif bellow_zero or over_size:
-                circles.pop(i)
-                area.pop(i)
-            else:
-                i += 1
+        pixels = pixels_in_circle(roi, cx, cy, r)
+        area_label = sum(pixels)
+        area_circle = np.pi * r**2
+        outside_mask = area_circle  / 2 > area_label
+        bellow_zero = cx - r < 0 or cy - r < 0
+        over_size = cx + r > dims[1] or cy + r > dims[0]
+
+        if outside_mask or bellow_zero or over_size:
+            circles.remove(circles[i])
         else:
-            smaller = area[i] <= median / 1.5
-            bigger = area[i] >= median * 2
-            if smaller or bigger:
-                circles.pop(i)
-                area.pop(i)
-                j = 0
-            else:
-                i += 1
-                j += 1
+            i += 1
 
     return circles
 
@@ -784,7 +753,7 @@ def histogram_sizes(sizes, file_name, np_type):
     file_name = f'{file_name[:-4]}hist.png'
 
     if np_type == "nanoparticles":
-        plt.hist(sizes[1], bins=10, color="dodgerblue", edgecolor="black")
+        plt.hist(sizes, bins=10, color="dodgerblue", edgecolor="black")
         plt.title("Histogram of sizes of NPs")
         plt.xlabel("diameter [nm]")
         plt.ylabel("frequency [-]")

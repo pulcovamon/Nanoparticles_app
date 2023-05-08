@@ -15,7 +15,9 @@ from skimage.segmentation import watershed, clear_border
 from skimage.feature import peak_local_max, canny
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
-from skimage.morphology import remove_small_holes, remove_small_objects, disk, erosion
+from skimage.morphology import (
+    remove_small_holes, remove_small_objects, disk, erosion, dilation, opening, convex_hull_image, closing
+)
 from sklearn.cluster import KMeans
 import random
 
@@ -178,10 +180,10 @@ def binarizing(img, np_type):
     img *= 255
     edges = cv2.Canny(img.astype(np.uint8), 20, 200)
 
-    plt.subplot(2, 2, 1)
+    '''plt.subplot(2, 2, 1)
     plt.imshow(binary, cmap='gray')
     plt.subplot(2, 2, 2)
-    plt.imshow(edges, cmap='gray')
+    plt.imshow(edges, cmap='gray')'''
 
     binary[edges == 255] = 0
     binary = cv2.morphologyEx(binary.astype(np.uint8),
@@ -192,26 +194,14 @@ def binarizing(img, np_type):
         binary = ndi.binary_fill_holes(binary)
     binary = clear_border(binary)
 
-    plt.subplot(2, 2, 3)
+    '''plt.subplot(2, 2, 3)
     plt.imshow(binary, cmap='gray')
-    plt.show()
+    plt.show()'''
         
     return binary
 
 
-def detect_ellipses(binary):
-    cnts = cv2.findContours(binary.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    i = 0
-    for contour in cnts:
-        if i == 0:
-            i = 1
-            continue
-        cv2.drawContours(binary.astype(np.uint8), [contour], 0, (0, 0, 255), 5)
-        plt.imshow(binary)
-        plt.show()
-
-
-def watershed_transform(binary, np_type):
+def watershed_transform(binary, np_type, pixel_size):
     """Label image using calculated
     distance map and markers for watershed transform
 
@@ -221,24 +211,57 @@ def watershed_transform(binary, np_type):
     Returns:
         numpy.ndarray: labeled image
     """
-
-    distance = ndi.distance_transform_edt(binary)
-    img = -distance
-    
     if np_type == 'nanoparticles':
-        coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=20)
+        seeds = np.zeros(binary.shape, dtype=np.uint8)
+        mask = binary.copy()
+
+        while np.sum(mask) > 0:
+            regions = erosion(mask)
+            regions = label(regions)
+
+            for i in range(1, np.max(regions) + 1):
+                roi = regions == i
+                convex_hull = convex_hull_image(roi)
+                diff = convex_hull != roi
+                diff = np.sum(diff.astype(np.float32))
+                area = roi.astype(np.float32).sum()
+                convex = (diff == 0 or 10 * diff < area) and area > 5 / pixel_size
+                if convex:
+                    seeds[roi] = 1
+                    regions[regions == i] = 0
+            mask = regions > 0
+
+        seeds = dilation(seeds)
+
+        distance = ndi.distance_transform_edt(binary)
+        img = -distance
+    
+
+        '''coords = peak_local_max(distance, footprint=np.ones((3, 3)), min_distance=int(10/pixel_size))
         mask = np.zeros(distance.shape, dtype=bool)
-        mask[tuple(coords.T)] = True
+        mask[tuple(coords.T)] = True'''
+
     else:
+        distance = ndi.distance_transform_edt(binary)
+        img = -distance
         mask =  binary
         for _ in range(10):
             mask = remove_small_holes(mask)
             mask = remove_small_objects(mask)
         for _ in range(10):
             mask = erosion(mask)
+            seeds = mask
 
-    markers, _ = ndi.label(mask)
+    markers, _ = ndi.label(seeds)
+    #markers2, _ = ndi.label(mask)
     labels = watershed(img, markers, mask=binary)
+    #labels2 = watershed(img, markers2, mask=binary)
+
+    '''plt.subplot(1, 2, 1)
+    plt.imshow(labels, cmap='tab20')
+    plt.subplot(1, 2, 2)
+    plt.imshow(labels2, cmap='tab20')
+    plt.show()'''
 
     return labels
 
@@ -256,14 +279,15 @@ def segmentation(img, binary, np_type, pixel_size):
     Returns:
         numpy.ndarray, list: labeled image, ist of sizes
     """
-    labels = watershed_transform(binary, np_type)
+    labels = watershed_transform(binary, np_type, pixel_size)
     sizes, props_watershed = calculation_watershed(labels, np_type)
-    labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
+    #labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
     sizes = [i for i in sizes]
 
     if np_type == "nanoparticles":
         props_ht, seeds = find_overlaps(img, binary, sizes, np_type, pixel_size)
-        sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
+        props_ht = []
+        #sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
     else:
         sizes[0] = [i * pixel_size for i in sizes[1]]
         sizes[1] = [i * pixel_size for i in sizes[2]]
@@ -304,7 +328,7 @@ def result_image(raw, labels, np_type, props_ht):
             x *= 2
             y *= 2
             r *= 2
-            cv2.circle(img, (x, y), r, (255, 0, 255), 2)
+            cv2.circle(img, (x, y), r, (0, 0, 255), 2)
 
     return img
 
@@ -726,6 +750,7 @@ def calculation_watershed(labeled, np_type):
             labeled, properties=["label", "area_convex", "equivalent_diameter_area"]
         )
         sizes = props["area_convex"]
+        sizes = [2 * (i / np.pi)**(1/2) for i in sizes]      # S = pi * r^2 = pi * d^2 / 4 d = 2 * r = 2 * sqrt(S / pi)
 
     else:
         props = regionprops_table(
@@ -756,10 +781,10 @@ def histogram_sizes(sizes, file_name, np_type):
     Args:
         sizes (list): list of NP sizes
     """
-    file_name = f'{file_name[:-4]}hist{file_name[-4:]}'
+    file_name = f'{file_name[:-4]}hist.png'
 
     if np_type == "nanoparticles":
-        plt.hist(sizes, bins=10, color="brown", edgecolor="black")
+        plt.hist(sizes[1], bins=10, color="dodgerblue", edgecolor="black")
         plt.title("Histogram of sizes of NPs")
         plt.xlabel("diameter [nm]")
         plt.ylabel("frequency [-]")
@@ -767,8 +792,8 @@ def histogram_sizes(sizes, file_name, np_type):
         plt.clf()
 
     elif np_type == "nanorods":
-        plt.hist(sizes[0], bins=10, color="forestgreen", edgecolor="black")
-        plt.hist(sizes[1], bins=10, color="brown", edgecolor="black")
+        plt.hist(sizes[0], bins=10, color="forestgreen", edgecolor="black", range=[0, 100])
+        plt.hist(sizes[1], bins=10, color="brown", edgecolor="black", range=[0, 100])
         plt.legend(["major axis", "minor axis"])
         plt.title("Histogram of sizes of NRs")
         plt.xlabel("axis length [nm]")
@@ -834,7 +859,7 @@ def image_analysis(input_description, image, images=None, names=None):
 
     img_raw, pixel_size = loading_img(img_path, scale)
     img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size, background)
-    binary = binarizing(img_filtered, np_type, background)
+    binary = binarizing(img_filtered, np_type)
     labels, sizes, props_ht = segmentation(
         img_filtered, binary, np_type, pixel_size
     )

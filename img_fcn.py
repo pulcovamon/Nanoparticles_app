@@ -9,9 +9,9 @@ import re
 import argparse
 from copy import deepcopy, copy
 from skimage.io import imread
-from skimage.filters import threshold_otsu, threshold_minimum, median, rank, _gaussian
+from skimage.filters import threshold_otsu, threshold_minimum, median
 from skimage.color import rgb2gray
-from skimage.segmentation import watershed
+from skimage.segmentation import watershed, clear_border
 from skimage.feature import peak_local_max, canny
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
@@ -150,32 +150,17 @@ def background(img):
 
     img *= 255
     img = cv2.edgePreservingFilter(img.astype(np.uint8),
-                                   flags=1,
+                                   flags=cv2.RECURS_FILTER,
                                    sigma_s=60,
                                    sigma_r=0.1)
     img = cv2.medianBlur(img.astype(np.uint8), 9)
-
-    plt.imshow(img, cmap='gray')
-    plt.show()
     
     return img
 
 
-def light_particles(img, np_type):
-    """Find light spots in particles
-    
-    Args:
-        img (numpy.ndarray): single-channel image
-        np_type (string): nanoparticles or nanorods"""
-    maximum = np.max(img)
-    if maximum == 1.0:
-        img[img == 1.0] = 0
-        plt.imshow(img)
-        plt.show()
-
-
-def binarizing(img, np_type, is_bg):
-    """Find threshold and binarize image
+def binarizing(img, np_type):
+    """Find threshold, binarize image and perfrom morphological operations
+        for clearing image, cannny edge detection for better separation.
 
     Args:
         img (numpy.ndarray): single-channel image
@@ -184,22 +169,11 @@ def binarizing(img, np_type, is_bg):
     Returns:
         numpy array: binary image
     """
-
-    if np_type == "nanoparticles":
-        thresh = threshold_minimum(img)
-    else:
-        thresh = threshold_otsu(img)
+    thresh = threshold_otsu(img)
 
     binary = img < thresh
     binary = remove_small_holes(binary)
     binary = remove_small_objects(binary)
-
-    '''if is_bg:
-        for _ in range(3):
-            binary = cv2.morphologyEx(binary.astype(np.uint8),
-                                    cv2.MORPH_OPEN, disk(5))
-            binary = cv2.morphologyEx(binary.astype(np.uint8),
-                                      cv2.MORPH_CLOSE, disk(5))'''
 
     img *= 255
     edges = cv2.Canny(img.astype(np.uint8), 20, 200)
@@ -214,11 +188,13 @@ def binarizing(img, np_type, is_bg):
                                     cv2.MORPH_ERODE, disk(5))
     binary = cv2.morphologyEx(binary.astype(np.uint8),
                                     cv2.MORPH_DILATE, disk(5))
+    if np_type == 'nanorods':
+        binary = ndi.binary_fill_holes(binary)
+    binary = clear_border(binary)
+
     plt.subplot(2, 2, 3)
     plt.imshow(binary, cmap='gray')
-
-    if np_type == "nanorods":
-        plt.show()
+    plt.show()
         
     return binary
 
@@ -318,7 +294,7 @@ def result_image(raw, labels, np_type, props_ht):
         labels_new[labels == i] = mix[i - 1]
 
     labels = np.ma.masked_where(labels_new == 0, labels_new)
-    c_map = plt.get_cmap('hsv', max_val).copy()
+    c_map = plt.get_cmap('gist_rainbow', max_val).copy()
     c_map.set_bad(color='black', alpha=None)
     labels = c_map(labels)
     img = overlay_images(raw, labels)

@@ -1,0 +1,16 @@
+{
+    "np_type": "nanoparticles",
+    "identificator": "40nmAuNP",
+    "40nmAuNP_002.jpg": [
+        "50",
+        "data/40nmAuNP/40nmAuNP_002.jpg"
+    ],
+    "40nmAuNP_001.jpg": [
+        "100",
+        "data/40nmAuNP/40nmAuNP_001.jpg"
+    ],
+    "40nmAuNP_003.jpg": [
+        "50",
+        "data/40nmAuNP/40nmAuNP_003.jpg"
+    ]
+}

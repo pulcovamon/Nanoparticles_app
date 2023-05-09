@@ -33,8 +33,8 @@ def load_inputs(img_path):
     Returns:
         dict: dictionary with path to images, scales and types
     """
-    for _, dirs, files in os.walk(img_path):
-        json_found = False
+    json_found = False
+    for _, _, files in os.walk(img_path):
         for file in files:
             if file.endswith(".json"):
                 if json_found:
@@ -49,17 +49,18 @@ def load_inputs(img_path):
         input_description = json.load(json_file)
 
     for key in input_description.keys():
-        if not input_description[key][0].isdigit():
-            raise Exception("wrong input: size not number")
-
-        input_description[key][1].lower()
-        if (
-            input_description[key][1] != "nanoparticles"
-            and input_description[key][1] != "nanorods"
-        ):
-            raise Exception("wrong input: unknown type")
-
-        input_description[key].append(os.path.join(img_path, key))
+        if key == 'np_type':
+            input_description[key].lower()
+            if (
+                input_description[key] != "nanoparticles"
+                and input_description[key] != "nanorods"
+            ):
+                raise Exception("wrong input: unknown type")
+        elif key == 'identificator':
+            continue
+        else:
+            if not input_description[key][0].isdigit():
+                raise Exception("wrong input: size not number")
 
     return input_description
 
@@ -744,13 +745,13 @@ def calculation_watershed(labeled, np_type):
     return sizes, selected
 
 
-def histogram_sizes(sizes, file_name, np_type):
+def histogram_sizes(sizes, identificator, np_type, folder):
     """Create histogram of sizes of NP
 
     Args:
         sizes (list): list of NP sizes
     """
-    file_name = f'{file_name[:-4]}hist.png'
+    file_name = f'{folder}/results/{identificator}_hist.png'
 
     if np_type == "nanoparticles":
         plt.hist(sizes, bins=10, color="dodgerblue", edgecolor="black")
@@ -786,15 +787,9 @@ def read_args():
     )
 
     parser.add_argument(
-        "-p", "--path", type=str, default="data/images", help="path to images (default: data/images)"
+        "--folder_path", type=str, default="data/images", help="path to images (default: data/images)"
     )
-    parser.add_argument(
-        "-m",
-        "--method",
-        type=str,
-        default="watershed",
-        help="segmentation method (default: watershed)",
-    )
+
     parser.add_argument(
         "-s", "--show", type=bool, default=False, help="Plotting image (default: False)"
     )
@@ -805,7 +800,7 @@ def read_args():
     return config
 
 
-def image_analysis(input_description, image, images=None, names=None):
+def image_analysis(input_description, image, np_type, folder, images=None, names=None):
     """Analyze image of NPs and calculate properties
 
     Args:
@@ -817,10 +812,8 @@ def image_analysis(input_description, image, images=None, names=None):
     Returns:
         path, path, path: path to labeled image, histogram of sizes and txt file with properties
     """
-
     scale = int(input_description[image][0])
-    np_type = input_description[image][1]
-    img_path = input_description[image][2]
+    img_path = input_description[image][1]
     if np_type == "nanorods":
         background = True
     else:
@@ -832,18 +825,19 @@ def image_analysis(input_description, image, images=None, names=None):
     labels, sizes, props_ht = segmentation(
         img_filtered, binary, np_type, pixel_size
     )
+
     img = result_image(img_raw, labels, np_type, props_ht)
 
     if images and names:
         images.append(img)
         names.append(img_path)
 
-    labeled_filename, sizes_filename = saving(img, img_path, sizes, np_type)
-    hist_filename = histogram_sizes(sizes, labeled_filename, np_type)
+    directory = f'{folder}/results'
+    labeled_filename = saving(img, img_path, sizes, np_type, directory)
 
-    print("saving into:", sizes_filename)
+    print("saving into:", labeled_filename)
 
-    return labeled_filename, hist_filename, sizes_filename
+    return labeled_filename, sizes, np_type
 
 
 def get_config():
@@ -853,30 +847,35 @@ def get_config():
         Exception: wrong method
 
     Returns:
-        dict, str, bool: metadata, method, plot result or not
+        dict, bool: metadata, plot result or not
     """
 
     config = read_args()
-    print(config["path"])
+    print(config["folder_path"])
 
-    input_description = load_inputs(config["path"])
-    method = config["method"]
+    input_description = load_inputs(config["folder_path"])
     show = config["show"]
 
-    if method != "watershed":
-        raise Exception("unknown method")
-
-    return input_description, method, show
+    return input_description, config["folder_path"], show
 
 
 if __name__ == "__main__":
-    input_description, _, show = get_config()
+    input_description, folder, show = get_config()
+    identificator = input_description["identificator"]
+    np_type = input_description["np_type"].lower()
+    input_description.pop("identificator")
+    input_description.pop("np_type")
+
+    result_folder = f'{folder}/results'
+    if not os.path.exists(result_folder):
+        os.makedirs(result_folder)
 
     images = []
     names = []
 
     for image in input_description:
-        image_analysis(input_description, image, images, names)
+        _, sizes, np_type = image_analysis(input_description, image, np_type, folder, images, names)
+        hist_filename = histogram_sizes(sizes, identificator, np_type, folder)
 
     if show:
         ploting_img(images, names)

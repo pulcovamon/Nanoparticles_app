@@ -1,0 +1,8 @@
+40nmAuNP results:
+
+mean value: 39.039 nm
+interquartile range: 4.702 nm
+
+small structures detected (seeds)
+
+0 outliers detected

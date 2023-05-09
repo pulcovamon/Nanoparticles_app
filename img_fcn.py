@@ -3,20 +3,21 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from scipy import ndimage as ndi
+from scipy import stats
 import json
 import os
 import re
 import argparse
-from copy import deepcopy, copy
+from copy import deepcopy
 from skimage.io import imread
-from skimage.filters import threshold_otsu, threshold_minimum, median
+from skimage.filters import threshold_otsu, median
 from skimage.color import rgb2gray
 from skimage.segmentation import watershed, clear_border
-from skimage.feature import peak_local_max, canny
+from skimage.feature import canny
 from skimage.transform import rescale, hough_circle, hough_circle_peaks
 from skimage.measure import regionprops_table, label
 from skimage.morphology import (
-    remove_small_holes, remove_small_objects, disk, erosion, dilation, opening, convex_hull_image, closing
+    remove_small_holes, remove_small_objects, disk, erosion, dilation, convex_hull_image
 )
 from sklearn.cluster import KMeans
 import random
@@ -274,13 +275,16 @@ def segmentation(img, binary, np_type, pixel_size):
     if np_type == "nanoparticles":
         props_ht = find_overlaps(img, labels, sizes, np_type, pixel_size)
         sizes = find_duplicity(labels, props_ht, props_watershed, pixel_size)
+        seeds, seeds_sizes = detect_seeds(deepcopy(sizes))
+        if seeds:
+            sizes = [i for i in sizes if i not in seeds_sizes]
     else:
         labels, props_watershed = filter_blobs(labels, sizes, props_watershed)
         sizes[0] = [i * pixel_size for i in sizes[1]]
         sizes[1] = [i * pixel_size for i in sizes[2]]
         props_ht = []
 
-    return labels, sizes, props_ht
+    return labels, sizes, props_ht, seeds
 
 
 def result_image(raw, labels, np_type, props_ht):
@@ -372,14 +376,19 @@ def find_duplicity(labels, props_ht, props_wsh, pixel_size):
 
 def detect_seeds(sizes):
     sizes = np.array(sizes).reshape(-1, 1)
-    kmeans = KMeans(n_clusters=2).fit(sizes)
+    kmeans = KMeans(n_clusters=2, n_init="auto").fit(sizes)
     centers = kmeans.cluster_centers_
-    if centers[0] > 4*centers[1] or centers[1] > 4*centers[0]:
+    if centers[0] > 4*centers[1]:
         seeds = True
+        seeds_sizes = [sizes[i] for i in range(len(sizes)) if kmeans.labels_[i] == 1]
+    elif centers[1] > 4*centers[0]:
+        seeds = True
+        seeds_sizes = [sizes[i] for i in range(len(sizes)) if kmeans.labels_[i] == 0]
     else:
         seeds = False
+        seeds_sizes = []
 
-    return seeds, centers
+    return seeds, seeds_sizes
         
 
 
@@ -649,58 +658,22 @@ def ploting_img(images, names):
     plt.show()
 
 
-def saving(img, file_name, sizes, np_type, directory="results"):
+def saving(img, file_name, directory="results"):
     """Save result image into given directory.
 
     Args:
         img (numpy array): labeled image
         file_name (str): name of current input image file
-        sizes (list): list of sizes in current input
-        np_type (str): nanoparticles or nanorods
         directory (str, optional): path to directory
 
     Returns:
         string: path to file
     """
     name = re.split("/", file_name)
-    res_path = os.path.join(directory, name[-1])
-    plt.imsave(res_path, img)
+    result_path = os.path.join(directory, name[-1])
+    plt.imsave(result_path, img)
 
-    size_path = re.split("\\.", res_path)
-    size_path = f'{size_path[0]}.txt'
-
-    with open(size_path, "w") as txt_file:
-        if np_type == "nanoparticles":
-            avg = round(sum(sizes) / len(sizes), 3)
-            avg = f"mean diameter: {avg} nm\n"
-            txt_file.write(avg)
-
-            for size in sizes:
-                curr_size = str(size)
-                txt_file.write(curr_size)
-                txt_file.write('\n')
-        else:
-            avg_area = round(sum(sizes[0]) / len(sizes[0]), 3)
-            avg_area = "mean area: " + str(avg_area) + "nm^2\n"
-            txt_file.write(avg_area)
-
-            avg_major = round(sum(sizes[1]) / len(sizes[1]), 3)
-            avg_major = "mean major axis length: " + str(avg_major) + "nm\n"
-            txt_file.write(avg_major)
-
-            avg_minor = round(sum(sizes[2]) / len(sizes[2]), 3)
-            avg_minor = "mean minor axis length: " + str(avg_minor) + "nm\n"
-            txt_file.write(avg_minor)
-
-            header = "area, major_axis, minor_axis\n"
-            txt_file.write(header)
-
-            for i in range(len(sizes[0])):
-                line = [str(sizes[0][i]), str(sizes[1][i]), str(sizes[2][i])]
-                txt_file.writelines(line)
-                txt_file.write('\n')
-
-    return res_path, size_path
+    return result_path
 
 
 def calculation_watershed(labeled, np_type):
@@ -745,33 +718,135 @@ def calculation_watershed(labeled, np_type):
     return sizes, selected
 
 
-def histogram_sizes(sizes, identificator, np_type, folder):
+def histogram_saving(sizes, identificator, folder, title, xlabel='diameter [nm]', ylabel='frequency [-]'):
     """Create histogram of sizes of NP
 
     Args:
         sizes (list): list of NP sizes
     """
-    file_name = f'{folder}/results/{identificator}_hist.png'
+    filename = f'{folder}/results/{identificator}_hist.png'
 
+    plt.hist(sizes, bins=20, color="dodgerblue", edgecolor="black", range=[0, 100])
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.savefig(filename)
+    print("saving into:", filename)
+    plt.clf()
+
+
+def statistics(sizes):
+    """Calculate statistical parameters
+
+    Args:
+        sizes (_type_): _description_
+        identificator (_type_): _description_
+        folder (_type_): _description_
+        seeds (bool, optional): _description_. Defaults to False.
+    """
+    mean_value = np.round(calc_median(sizes), decimals=3)
+    interquartile = np.round(stats.iqr(sizes), decimals=3)
+
+    z_score = stats.zscore(sizes)
+    thresh = 3
+    outliers = np.where(z_score > thresh)
+    outliers = [sizes[i] for i in outliers[0]]
+
+    return mean_value, interquartile, outliers
+
+
+def textfile_saving(mean_value, interquartile, outliers, identificator, folder, np_type, seeds=False):
+    """Saving results into text file
+
+    Args:
+        mean_value (_type_): _description_
+        interquartile (_type_): _description_
+        identificator (_type_): _description_
+        folder (_type_): _description_
+        seeds (bool, optional): _description_. Defaults to False.
+    """
+    filename = f'{folder}/results/{identificator}_results.txt'
+
+    with open(filename, mode='w') as file:
+        file.write(f'{identificator} results:\n\n')
+
+        if np_type == 'nanoparticles':
+            file.write(f'mean value: {mean_value} nm\n')
+            file.write(f'interquartile range: {interquartile} nm\n')
+            
+            if seeds:
+                file.write(f'\nsmall structures detected (seeds)\n')
+
+        elif np_type == 'nanorods':
+            file.write(f'mean value of major axis: {mean_value[0]} nm\n')
+            file.write(f'interquartile range of major axis: {interquartile[0]} nm\n')
+            file.write(f'mean value of minor axis: {mean_value[1]} nm\n')
+            file.write(f'interquartile range of minor axis: {interquartile[1]} nm\n')
+
+        file.write(f'\n{len(outliers)} outliers detected\n')
+
+    print("saving into:", filename)
+
+
+def boxplot_saving(sets, identificator, folder, title, xlabel='image number [-]', ylabel='diameter [nm]'):
+    """Create boxplot of sizes of NP
+
+    Args:
+        sets (_type_): _description_
+        identificator (_type_): _description_
+        folder (_type_): _description_
+        title (_type_): _description_
+        xlabel (str, optional): _description_. Defaults to 'image number [-]'.
+        ylabel (str, optional): _description_. Defaults to 'diameter [nm]'.
+    """
+    filename = f'{folder}/results/{identificator}_boxplot.png'
+
+    plt.boxplot(sets)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.savefig(filename)
+    print("saving into:", filename)
+    plt.clf()
+
+
+def saving_result(all_sizes, sets_sizes, identificator, np_type, folder, seeds=False):
+    """Create text file with results
+
+    Args:
+        sizes (_type_): _description_
+        identificator (_type_): _description_
+        np_type (_type_): _description_
+        folder (_type_): _description_
+    """
     if np_type == "nanoparticles":
-        plt.hist(sizes, bins=10, color="dodgerblue", edgecolor="black")
-        plt.title("Histogram of sizes of NPs")
-        plt.xlabel("diameter [nm]")
-        plt.ylabel("frequency [-]")
-        plt.savefig(file_name)
-        plt.clf()
+        title = "Boxplot of sizes of NPs sample through various images"
+        boxplot_saving(sets_sizes, identificator, folder, title)
 
-    elif np_type == "nanorods":
-        plt.hist(sizes[0], bins=10, color="forestgreen", edgecolor="black", range=[0, 100])
-        plt.hist(sizes[1], bins=10, color="brown", edgecolor="black", range=[0, 100])
-        plt.legend(["major axis", "minor axis"])
-        plt.title("Histogram of sizes of NRs")
-        plt.xlabel("axis length [nm]")
-        plt.ylabel("frequency [-]")
-        plt.savefig(file_name)
-        plt.clf()
+        title = "Histogram of sizes of NPs"
+        histogram_saving(all_sizes, identificator, folder, title)
 
-    return file_name
+        mean_value, interquartile, outliers = statistics(all_sizes)
+
+        textfile_saving(mean_value, interquartile, outliers, identificator, folder, np_type, seeds)
+
+    elif np_type == 'nanorods':
+        title = "Histogram of sizes of nanorods"
+        histogram_saving(all_sizes[1], identificator, folder, title, xlabel='major axis length [nm]')
+
+        title = "Histogram of sizes of nanorods"
+        histogram_saving(all_sizes[2], identificator, folder, title, xlabel='minor axis length [nm]')
+
+        mean1, iqr1, out1 = statistics(all_sizes[1])
+        mean2, iqr2, out2 = statistics(all_sizes[2])
+
+        mean_value = [mean1, mean2]
+        interquartile = [iqr1, iqr2]
+        outliers = [out1, out2]
+
+        textfile_saving(mean_value, interquartile, outliers, identificator, folder, np_type)
+
+
 
 
 def read_args():
@@ -822,7 +897,7 @@ def image_analysis(input_description, image, np_type, folder, images=None, names
     img_raw, pixel_size = loading_img(img_path, scale)
     img_filtered, pixel_size = filtering_img(img_raw, scale, np_type, pixel_size, background)
     binary = binarizing(img_filtered, np_type)
-    labels, sizes, props_ht = segmentation(
+    labels, sizes, props_ht, seeds = segmentation(
         img_filtered, binary, np_type, pixel_size
     )
 
@@ -833,11 +908,11 @@ def image_analysis(input_description, image, np_type, folder, images=None, names
         names.append(img_path)
 
     directory = f'{folder}/results'
-    labeled_filename = saving(img, img_path, sizes, np_type, directory)
+    labeled_filename = saving(img, img_path, directory)
 
     print("saving into:", labeled_filename)
 
-    return labeled_filename, sizes, np_type
+    return labeled_filename, sizes, np_type, seeds
 
 
 def get_config():
@@ -872,10 +947,15 @@ if __name__ == "__main__":
 
     images = []
     names = []
+    all_sizes = []
+    sets_sizes = []
 
     for image in input_description:
-        _, sizes, np_type = image_analysis(input_description, image, np_type, folder, images, names)
-        hist_filename = histogram_sizes(sizes, identificator, np_type, folder)
+        _, sizes, np_type, seeds = image_analysis(input_description, image, np_type, folder, images, names)
+        all_sizes += sizes
+        sets_sizes.append(sizes)
+
+    saving_result(all_sizes, sets_sizes, identificator, np_type, folder, seeds)
 
     if show:
         ploting_img(images, names)

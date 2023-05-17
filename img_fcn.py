@@ -283,6 +283,7 @@ def segmentation(img, binary, np_type, pixel_size):
         sizes[0] = [i * pixel_size for i in sizes[1]]
         sizes[1] = [i * pixel_size for i in sizes[2]]
         props_ht = []
+        seeds = False
 
     return labels, sizes, props_ht, seeds
 
@@ -778,10 +779,10 @@ def textfile_saving(mean_value, interquartile, outliers, identificator, folder, 
                 file.write(f'\nsmall structures detected (seeds)\n')
 
         elif np_type == 'nanorods':
-            file.write(f'mean value of major axis: {mean_value[0]} nm\n')
-            file.write(f'interquartile range of major axis: {interquartile[0]} nm\n')
-            file.write(f'mean value of minor axis: {mean_value[1]} nm\n')
-            file.write(f'interquartile range of minor axis: {interquartile[1]} nm\n')
+            file.write(f'mean value of minor axis: {mean_value[0]} nm\n')
+            file.write(f'interquartile range of minor axis: {interquartile[0]} nm\n')
+            file.write(f'mean value of major axis: {mean_value[1]} nm\n')
+            file.write(f'interquartile range of major axis: {interquartile[1]} nm\n')
 
         file.write(f'\n{len(outliers)} outliers detected\n')
 
@@ -831,11 +832,21 @@ def saving_result(all_sizes, sets_sizes, identificator, np_type, folder, seeds=F
         textfile_saving(mean_value, interquartile, outliers, identificator, folder, np_type, seeds)
 
     elif np_type == 'nanorods':
-        title = "Histogram of sizes of nanorods"
-        histogram_saving(all_sizes[1], identificator, folder, title, xlabel='major axis length [nm]')
+        title = "Boxplot of minor axis if NRs sample through various images"
+        boxplot_saving(sets_sizes[1], identificator+'minor', folder, title)
 
-        title = "Histogram of sizes of nanorods"
-        histogram_saving(all_sizes[2], identificator, folder, title, xlabel='minor axis length [nm]')
+        title = "Boxplot of major axis if NRs sample through various images"
+        boxplot_saving(sets_sizes[2], identificator+'major', folder, title)
+    
+        title = "Histogram of sizes of nanorods - minor axis"
+        histogram_saving(all_sizes[1], identificator+'minor', folder, title, xlabel='minor axis length [nm]')
+
+        title = "Histogram of sizes of nanorods - major axis"
+        histogram_saving(all_sizes[2], identificator+'major', folder, title, xlabel='major axis length [nm]')
+
+        title = 'Histogram of aspect ratios of nanorods'
+        aspect_ratio = [all_sizes[2][i]/all_sizes[1][i] for i in range(len(all_sizes[1]))]
+        histogram_saving(aspect_ratio, identificator+'AR', folder, title, xlabel='Aspect Ratio [-]')
 
         mean1, iqr1, out1 = statistics(all_sizes[1])
         mean2, iqr2, out2 = statistics(all_sizes[2])

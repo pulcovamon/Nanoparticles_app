@@ -95,13 +95,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(title, 0, 0, 2, 6,
                                 Qt.AlignmentFlag.AlignTop)
 
-        self.add_img = QPushButton('Upload image')
+        self.add_img = QPushButton('Upload images')
         self.add_img.clicked.connect(self.add_img_fcn)
         self.add_img.setFixedSize(400, 40)
         layout.addWidget(self.add_img, 2, 0, 1, 7,
                             Qt.AlignmentFlag.AlignCenter)
 
-        self.process = QPushButton('Analyze image')
+        self.process = QPushButton('Analyze images')
         self.process.clicked.connect(self.processing)
         self.process.setDisabled(True)
         self.process.setFixedSize(400, 40)
@@ -199,8 +199,8 @@ class MainWindow(QMainWindow):
 
 
     def add_img_fcn(self):
-        self.fname = QFileDialog.getOpenFileName(self,
-            "Open File", "", "Images (*.jpg *.png *.bmp *.tiff)")
+        self.fname = QFileDialog.getOpenFileNamesAndFilter(self,
+            "Open Files", "", "Images (*.jpg *.png *.bmp *.tiff)")
 
         if self.fname[0]:
             pixmap = QPixmap(self.fname[0])

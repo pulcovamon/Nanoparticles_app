@@ -1,0 +1,6 @@
+AuNP50nm results:
+
+mean value: 51.156 nm
+interquartile range: 17.678 nm
+
+4 outliers detected

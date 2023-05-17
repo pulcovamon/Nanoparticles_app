@@ -1,0 +1,8 @@
+A800AuNR results:
+
+mean value of minor axis: 11.044 nm
+interquartile range of minor axis: 0.48 nm
+mean value of major axis: 36.003 nm
+interquartile range of major axis: 1.566 nm
+
+2 outliers detected

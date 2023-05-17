@@ -1,0 +1,6 @@
+AuNP20nm results:
+
+mean value: 19.632 nm
+interquartile range: 0.04 nm
+
+2 outliers detected
